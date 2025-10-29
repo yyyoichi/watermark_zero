@@ -1,0 +1,27 @@
+{
+	"name": "WatermarkZero",
+	"image": "mcr.microsoft.com/devcontainers/base:jammy",
+	"features": {
+        "ghcr.io/devcontainers/features/go:1": {
+            "version": "1.24"
+		},
+        "ghcr.io/devcontainers/features/node:1": {
+            "nodeGypDependencies": true,
+            "installYarnUsingApt": true,
+            "version": "lts",
+            "pnpmVersion": "latest",
+            "nvmVersion": "latest"
+        },
+        "ghcr.io/jsburckhardt/devcontainer-features/ruff:1": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {}
+	},
+    "remoteUser": "vscode",
+	"workspaceFolder": "/workspaces/watermark_zero",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/watermark_zero,type=bind,consistency=cached",
+    "postCreateCommand": "sh ./.devcontainer/init.sh",
+	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+	"containerEnv": {
+        "TZ": "UTC"
+    },
+	"customizations": {}
+}
