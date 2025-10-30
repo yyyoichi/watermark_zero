@@ -1,0 +1,1 @@
+`uv run wavelets.py` -> `../test/dwt_test_cases.json`
