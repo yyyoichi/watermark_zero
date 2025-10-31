@@ -46,12 +46,12 @@ func New(opts ...Option) (*Watermark, error) {
 // Embed embeds a bit sequence into an image.
 //
 // Process:
-// 1. Converts the image to YUV color channels.
-// 2. Applies Haar wavelet transform to each channel.
-// 3. Divides the low-frequency region (cA) of each channel into blocks.
-// 4. Embeds one bit per block using Discrete Cosine Transform and SVD.
-// 5. Applies inverse transforms.
-// 6. Reconstructs the image.
+//  1. Converts the image to YUV color channels.
+//  2. Applies Haar wavelet transform to each channel.
+//  3. Divides the low-frequency region (cA) of each channel into blocks.
+//  4. Embeds one bit per block using Discrete Cosine Transform and SVD.
+//  5. Applies inverse transforms.
+//  6. Reconstructs the image.
 //
 // Returns an error if the image is too small for the bit sequence to be embedded.
 func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (image.Image, error) {
@@ -139,11 +139,11 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 // Extract extracts a bit sequence from an image.
 //
 // Process:
-// 1. Converts the image to YUV color channels.
-// 2. Applies Haar wavelet transform to each channel.
-// 3. Divides the low-frequency region (cA) of each channel into blocks.
-// 4. Extracts one bit per block using Discrete Cosine Transform and SVD.
-// 5. Determines boolean values using k-means clustering on the average values of each block's bits.
+//  1. Converts the image to YUV color channels.
+//  2. Applies Haar wavelet transform to each channel.
+//  3. Divides the low-frequency region (cA) of each channel into blocks.
+//  4. Extracts one bit per block using Discrete Cosine Transform and SVD.
+//  5. Determines boolean values using k-means clustering on the average values of each block's bits.
 //
 // Returns an error if the image is too small for the expected bit sequence length.
 func (w *Watermark) Extract(ctx context.Context, src image.Image, markLen int) ([]bool, error) {
