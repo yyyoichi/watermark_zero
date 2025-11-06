@@ -1,6 +1,8 @@
 package dwt
 
-import "math"
+import (
+	"math"
+)
 
 func HaarDWT(data []float32, w int, indexMap []int) [][]float32 {
 	h := len(data) / w
@@ -11,6 +13,13 @@ func HaarDWT(data []float32, w int, indexMap []int) [][]float32 {
 	cH := make([]float32, l)
 	cV := make([]float32, l)
 	cD := make([]float32, l)
+
+	if indexMap == nil || len(indexMap) != l {
+		indexMap = make([]int, l)
+		for i := range l {
+			indexMap[i] = i
+		}
+	}
 
 	for y0 := 0; y0 < h; y0 += 2 {
 		var y1 int
@@ -79,4 +88,37 @@ func cacd(v1, v2 float32) (float32, float32) {
 func icacd(a, d float32) (float32, float32) {
 	avr := a / math.Sqrt2
 	return avr + d/math.Sqrt2, avr - d/math.Sqrt2
+}
+
+type Wavelets struct {
+	hw, hh   int
+	original [][]float32
+}
+
+func New(data []float32, w int) *Wavelets {
+	h := len(data) / w
+	wavelets := Wavelets{
+		hw: (w + 1) / 2,
+		hh: (h + 1) / 2,
+	}
+	wavelets.original = HaarDWT(data, w, nil)
+	return &wavelets
+}
+
+func (w *Wavelets) Get(blockW, blockH int) [][]float32 {
+	l := w.hw * w.hh
+	result := [][]float32{
+		make([]float32, l),
+		make([]float32, l),
+		make([]float32, l),
+		make([]float32, l),
+	}
+	indexMap := NewBlockMap(w.hw, w.hh, blockW, blockH).GetMap()
+	for j, o := range w.original {
+		for i, v := range o {
+			idx := indexMap[i]
+			result[j][idx] = v
+		}
+	}
+	return result
 }

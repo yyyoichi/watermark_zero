@@ -3,6 +3,7 @@ package test
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,6 +88,21 @@ func TestDWT_HaarDWT(t *testing.T) {
 			require.Equal(t, len(tt.Input.Data), len(data), "Reconstructed data length mismatch")
 			for i := range tt.Input.Data {
 				assertFloatEqual(t, tt.Input.Data[i], data[i], "Reconstructed data", i)
+			}
+		})
+		t.Run(fmt.Sprintf("%s/WaveletGet", tt.Name), func(t *testing.T) {
+			for _, b := range [][2]int{
+				{2, 2},
+				{2, 4},
+				{4, 4},
+				{4, 8},
+				{8, 8},
+			} {
+				indexMap := dwt.NewBlockMap(tt.Input.Width/2, tt.Input.Height/2, b[0], b[1]).GetMap()
+				want := dwt.HaarDWT(tt.Input.Data, tt.Input.Width, indexMap)
+				wavelets := dwt.New(tt.Input.Data, tt.Input.Width)
+				got := wavelets.Get(b[0], b[1])
+				require.Equal(t, want, got, "Wavelets mismatch ", b[0], b[1])
 			}
 		})
 	}
