@@ -185,7 +185,7 @@ def main():
     test_cases = create_test_cases()
     
     # Output to JSON file
-    with open('../test/dwt_test_cases.json', 'w') as f:
+    with open('../internal/test/testcase/dwt_test_cases.json', 'w') as f:
         json.dump(test_cases, f, indent=2)
     
     print(f"Generated {len(test_cases)} test cases in dwt_test_cases.json")

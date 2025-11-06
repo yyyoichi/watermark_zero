@@ -166,7 +166,7 @@ def main():
     test_cases = create_svd_test_cases()
     
     # Output to JSON file
-    with open('../test/svd_test_cases.json', 'w') as f:
+    with open('../internal/test/testcase/svd_test_cases.json', 'w') as f:
         json.dump(test_cases, f, indent=2)
     
     print(f"Generated {len(test_cases)} test cases in svd_test_cases.json")

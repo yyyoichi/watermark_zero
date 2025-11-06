@@ -11,7 +11,7 @@ import (
 	"github.com/yyyoichi/watermark_zero/internal/dct"
 )
 
-//go:embed dct_test_cases.json
+//go:embed testcase/dct_test_cases.json
 var dctTestCasesJSON []byte
 
 func TestDCT_Exec(t *testing.T) {

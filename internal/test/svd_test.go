@@ -10,7 +10,7 @@ import (
 	"github.com/yyyoichi/watermark_zero/internal/svd"
 )
 
-//go:embed svd_test_cases.json
+//go:embed testcase/svd_test_cases.json
 var svdTestCasesJSON []byte
 
 func TestSVD_Exec(t *testing.T) {

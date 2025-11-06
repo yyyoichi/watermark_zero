@@ -11,7 +11,7 @@ import (
 	"github.com/yyyoichi/watermark_zero/internal/yuv"
 )
 
-//go:embed yuv_test_cases.json
+//go:embed testcase/yuv_test_cases.json
 var yuvTestCasesJSON []byte
 
 func TestYUV_ColorToYUVBatch(t *testing.T) {

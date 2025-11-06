@@ -10,7 +10,7 @@ import (
 	"github.com/yyyoichi/watermark_zero/internal/dwt"
 )
 
-//go:embed dwt_test_cases.json
+//go:embed testcase/dwt_test_cases.json
 var dwtTestCasesJSON []byte
 
 func TestDWT_HaarDWT(t *testing.T) {

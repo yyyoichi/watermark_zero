@@ -1,4 +1,4 @@
-package test
+package watermark_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	watermark "github.com/yyyoichi/watermark_zero"
 )
 
-func ExampleNew() {
+func Example_watermark() {
 	// Create a simple gradient image (100x100 pixels)
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
 	for y := 0; y < img.Bounds().Dy(); y++ {

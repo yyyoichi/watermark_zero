@@ -124,7 +124,7 @@ def main():
     test_cases = create_yuv_test_cases()
     
     # Output to JSON file
-    with open('../test/yuv_test_cases.json', 'w') as f:
+    with open('../internal/test/testcase/yuv_test_cases.json', 'w') as f:
         json.dump(test_cases, f, indent=2)
     
     print(f"Generated {len(test_cases)} test cases in yuv_test_cases.json")
