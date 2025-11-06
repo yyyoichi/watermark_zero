@@ -7,11 +7,12 @@ import (
 	"image/color"
 
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/strmark"
 )
 
 func Example_watermark() {
-	// Create a simple gradient image (100x100 pixels)
-	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	// Create a simple gradient image (200x200 pixels)
+	img := image.NewRGBA(image.Rect(0, 0, 200, 200))
 	for y := 0; y < img.Bounds().Dy(); y++ {
 		for x := 0; x < img.Bounds().Dx(); x++ {
 			// Create gradient effect: red increases with x, green increases with y, blue is a mix
@@ -23,14 +24,17 @@ func Example_watermark() {
 	}
 
 	// Initialize watermark processor with default settings
-	w, err := watermark.New()
+	w, err := watermark.New(
+		watermark.WithBlockShape(4, 6),
+		watermark.WithD1D2(36, 20),
+	)
 	if err != nil {
 		fmt.Printf("Error creating watermark: %v\n", err)
 		return
 	}
 
 	// Define a bit sequence to embed
-	mark := []bool{true, false, true, true, false, false, true, false}
+	mark := strmark.Encode("Test-Mark")
 
 	// Embed the watermark
 	ctx := context.Background()
@@ -47,22 +51,8 @@ func Example_watermark() {
 		return
 	}
 
-	// Compare original and extracted marks
-	fmt.Printf("Original:  %v\n", mark)
-	fmt.Printf("Extracted: %v\n", extractedMark)
-
-	// Check if they match
-	match := true
-	for i := range mark {
-		if mark[i] != extractedMark[i] {
-			match = false
-			break
-		}
-	}
-	fmt.Printf("Match: %v\n", match)
+	fmt.Println(strmark.Decode(extractedMark))
 
 	// Output:
-	// Original:  [true false true true false false true false]
-	// Extracted: [true false true true false false true false]
-	// Match: true
+	// Test-Mark
 }
