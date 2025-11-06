@@ -3,6 +3,8 @@ package wzeromark
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -15,41 +17,32 @@ import (
 )
 
 const (
-	// version 5bit + hash format 3bit
-	version1 = 17
 	// Length of the watermark, in bits
-	MarkLen = 91 * 8
-	// Context is the context string used in Ed25519ctx signatures
-	Context string = "watermark_zero/v1"
+	MarkLen         = 83 * 8
+	version1        = 1
+	context  string = "watermark_zero/v1"
 )
 
 var (
-	ErrInvalidCryptoSeedLength = errors.New("invalid crypto seed length")
-	ErrInvalidMarkLength       = errors.New("invalid mark length")
-	ErrInvalidVersion          = errors.New("invalid version")
-	ErrInvalidSignature        = errors.New("invalid signature")
-	ErrInvalidOrgCode          = errors.New("invalid organization code")
+	ErrInvalidMarkLength = errors.New("invalid mark length")
+	ErrInvalidVersion    = errors.New("invalid version")
+	ErrInvalidSignature  = errors.New("invalid signature")
+	ErrInvalidOrgCode    = errors.New("invalid organization code")
 )
 
 var _ strmark.Mark = (*WZeroMark)(nil)
 
 type WZeroMark struct {
-	pub      ed25519.PublicKey
-	priv     ed25519.PrivateKey
-	orgBytes []byte
-	now      func() time.Time
+	hmacKeyGen    keyGen
+	ed25519KeyGen keyGen
+	orgBytes      []byte
+	now           func() time.Time
 }
 
 // New creates a new WZeroMark instance.
-// cryptoSeed must be 32 bytes long, used to generate the Ed25519ctx key pair.
-// orgCode is a hexadecimal string representing 2 bytes (4 hex characters) identifying the organization.
-func New(cryptoSeed []byte, orgCode string) (*WZeroMark, error) {
-	if len(cryptoSeed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("%w: size: %d", ErrInvalidCryptoSeedLength, len(cryptoSeed))
-	}
-	priv := ed25519.NewKeyFromSeed(cryptoSeed)
-	pub := priv.Public().(ed25519.PublicKey)
-
+// New returns a new WZeroMark instance for watermark encoding/decoding.
+// orgMasterKey and systemSolt are used for key generation, orgCode is a 4-digit hex string representing the organization.
+func New(orgMasterKey, systemSolt []byte, orgCode string) (*WZeroMark, error) {
 	orgBytes, err := hex.DecodeString(orgCode)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidOrgCode, err)
@@ -58,96 +51,170 @@ func New(cryptoSeed []byte, orgCode string) (*WZeroMark, error) {
 		return nil, fmt.Errorf("%w: orgCode must decode to 2 bytes (4 hex chars)", ErrInvalidOrgCode)
 	}
 	return &WZeroMark{
-		pub:      pub,
-		priv:     priv,
-		orgBytes: orgBytes,
-		now:      time.Now,
+		hmacKeyGen:    newHmacKeygen(orgMasterKey, systemSolt),
+		ed25519KeyGen: newEd25519Keygen(orgMasterKey, systemSolt),
+		orgBytes:      orgBytes,
+		now:           time.Now,
 	}, nil
 }
 
-// Encode encodes the input string into a slice of booleans representing bits.
-// The encoded format is as follows:
-//
-//	1byte version + 8bytes unix nano timestamp + 2bytes orgCode + SHA256(32bytes)/2 + Ed25519ctx(64bytes)
-//	= 91bytes
+// Encode converts the input string into a watermark bit slice.
+// Only the watermark bits are returned; hash, timestamp, and nonce are not exposed.
 func (m *WZeroMark) Encode(src string) (mark []bool, err error) {
 	mark = make([]bool, MarkLen)
-	err = m.encode(src, mark, nil, nil)
+	err = m.encode(src, mark, nil, nil, nil)
 	return
 }
 
-// FullEncode encodes the input string into a slice of booleans representing bits.
-// It also returns the hexadecimal string of the embedded hash and the timestamp.
-// The encoded format is as follows:
-//
-//	1byte version + 8bytes unix nano timestamp + 2bytes orgCode + SHA256(32bytes)/2 + Ed25519ctx(64bytes)
-//	= 91bytes
-func (m *WZeroMark) FullEncode(src string) (mark []bool, hash string, timestamp time.Time, err error) {
+// FullEncode converts the input string into a watermark bit slice,
+// and also returns the hash (hex), timestamp, and nonce used in the watermark.
+func (m *WZeroMark) FullEncode(src string) (mark []bool, hash string, timestamp time.Time, nonce string, err error) {
 	mark = make([]bool, MarkLen)
-	err = m.encode(src, mark, &hash, &timestamp)
+	err = m.encode(src, mark, &hash, &timestamp, &nonce)
 	return
 }
 
-// Decode decodes the input slice of booleans back into the original string.
-// It returns the hexadecimal string of the embedded hash.
+// Decode returns the hash (hex) from the watermark bit slice.
+// Returns the hash if decoding succeeds.
 func (m *WZeroMark) Decode(mark []bool) (hash string, err error) {
-	err = m.decode(mark, &hash, nil)
+	err = m.decode(mark, &hash, nil, nil)
 	return
 }
 
-// FellDecode decodes the input slice of booleans back into the original string and timestamp.
-// It returns the hexadecimal string of the embedded hash and the timestamp.
-func (m *WZeroMark) FullDecode(mark []bool) (hash string, timestamp time.Time, err error) {
-	err = m.decode(mark, &hash, &timestamp)
+// FullDecode returns the hash, timestamp, and nonce from the watermark bit slice.
+// Returns all decoded values if successful.
+func (m *WZeroMark) FullDecode(mark []bool) (hash string, timestamp time.Time, nonce string, err error) {
+	err = m.decode(mark, &hash, &timestamp, &nonce)
 	return
 }
 
-// Verify verifies the integrity of the watermark mark against the provided hash string.
-// It returns true if the embedded hash matches the provided hash.
-func (m *WZeroMark) Verify(mark []bool, hash string) (ok bool, timestamp time.Time, err error) {
+// Verify checks if the watermark bit slice matches the expected hash for the given source string.
+// Returns true if the hash matches the hash generated from src and timestamp.
+// Also returns the timestamp and nonce.
+func (m *WZeroMark) Verify(mark []bool, src string) (ok bool, timestamp time.Time, nonce string, err error) {
 	var decoded string
-	err = m.decode(mark, &decoded, &timestamp)
-	ok = decoded == hash
+	err = m.decode(mark, &decoded, &timestamp, &nonce)
+	if err != nil {
+		if errors.Is(err, ErrInvalidSignature) {
+			err = nil
+			return
+		}
+		if errors.Is(err, ErrInvalidOrgCode) {
+			err = nil
+			return
+		}
+		if errors.Is(err, ErrInvalidVersion) {
+			err = nil
+			return
+		}
+		err = fmt.Errorf("failed to decode mark: %w", err)
+		return
+	}
+	_, exp, err := m.encodeSrc(timestamp, src)
+	if err != nil {
+		err = fmt.Errorf("failed to encode source: %w", err)
+		return
+	}
+	ok = decoded == exp
 	return
 }
 
-func (m *WZeroMark) encode(src string, mark []bool, hash *string, timestamp *time.Time) error {
-	h := sha256.Sum256([]byte(src))
+// EqualHash checks if the provided hash matches the hash generated from the source string and timestamp.
+// Returns true if hashes match.
+func (m *WZeroMark) EqualHash(hash, src string, timestamp time.Time) (ok bool, err error) {
+	_, exp, err := m.encodeSrc(timestamp, src)
+	if err != nil {
+		err = fmt.Errorf("failed to encode source: %w", err)
+		return
+	}
+	ok = hash == exp
+	return
+}
 
+// encode is an internal method that converts the source string into the watermark bit slice.
+// Optionally returns the hash, timestamp, and nonce used in the watermark.
+func (m *WZeroMark) encode(src string, mark []bool, hash *string, timestamp *time.Time, nonce *string) error {
+	now := m.now()
+
+	// 1. Generate HMAC Hash
+	h, hexHash, err := m.encodeSrc(now, src)
+	if err != nil {
+		return fmt.Errorf("failed to generate HMAC hash: %w", err)
+	}
+
+	// 2. Generate Ed25519 Private Key
+	edKeySeed, err := m.ed25519KeyGen.Generate(now)
+	if err != nil {
+		return fmt.Errorf("failed to generate Ed25519 key seed: %w", err)
+	}
+	priv := ed25519.NewKeyFromSeed(edKeySeed)
+
+	// 3. Create Payload and Sign
 	payload := make([]byte, MarkLen/8)
 	payload[0] = version1
-	now := m.now()
-	binary.BigEndian.PutUint64(payload[1:9], uint64(now.UnixNano()))
+	binary.BigEndian.PutUint64(payload[1:9], uint64(now.UnixMilli()<<16))
+	_, _ = rand.Read(payload[7:9])
 	copy(payload[9:11], m.orgBytes)
-	copy(payload[11:27], h[:16])
+	copy(payload[11:19], h)
 
-	sig, err := m.priv.Sign(nil, payload[:27], &ed25519.Options{
-		Context: Context,
+	sig, err := priv.Sign(nil, payload[:19], &ed25519.Options{
+		Context: context,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to sign payload: %w", err)
 	}
-	copy(payload[27:], sig)
+	copy(payload[19:], sig)
 
 	if len(mark) == MarkLen {
 		copy(mark, bitconv.BytesToBools(payload))
 	}
 	if hash != nil {
-		*hash = hex.EncodeToString(h[:16])
+		*hash = hexHash
 	}
 	if timestamp != nil {
 		*timestamp = now
 	}
+	if nonce != nil {
+		*nonce = hex.EncodeToString(payload[7:9])
+	}
 	return nil
 }
 
-func (m *WZeroMark) decode(mark []bool, hash *string, timestamp *time.Time) error {
+// encodeSrc generates the HMAC hash for the source string and timestamp.
+// Returns the hash bytes and its hex string.
+func (m *WZeroMark) encodeSrc(keyClock time.Time, src string) ([]byte, string, error) {
+	macKey, err := m.hmacKeyGen.Generate(keyClock)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate HMAC key: %w", err)
+	}
+	mac := hmac.New(sha256.New, macKey)
+	_, _ = mac.Write([]byte(src))
+	h := mac.Sum(nil)
+	return h[:8], hex.EncodeToString(h[:8]), nil
+}
+
+// decode is an internal method that returns the hash, timestamp, and nonce from the watermark bit slice.
+// Optionally returns these values.
+func (m *WZeroMark) decode(mark []bool, hash *string, timestamp *time.Time, nonce *string) error {
 	if len(mark) != MarkLen {
 		return fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
 	}
 	payload := bitconv.BoolsToBytes(mark)
-	if err := ed25519.VerifyWithOptions(m.pub, payload[:27], payload[27:], &ed25519.Options{
-		Context: Context,
+
+	msec := int64(binary.BigEndian.Uint64(payload[1:9])) >> 16
+	rectimestamp := time.UnixMilli(msec)
+
+	// 1. Generate Ed25519 Private Key
+	edKeySeed, err := m.ed25519KeyGen.Generate(rectimestamp)
+	if err != nil {
+		return fmt.Errorf("failed to generate Ed25519 key seed: %w", err)
+	}
+	priv := ed25519.NewKeyFromSeed(edKeySeed)
+	pub := priv.Public().(ed25519.PublicKey)
+
+	// 2. Verify Signature
+	if err := ed25519.VerifyWithOptions(pub, payload[:19], payload[19:], &ed25519.Options{
+		Context: context,
 	}); err != nil {
 		return ErrInvalidSignature
 	}
@@ -159,11 +226,13 @@ func (m *WZeroMark) decode(mark []bool, hash *string, timestamp *time.Time) erro
 	}
 
 	if timestamp != nil {
-		tm := int64(binary.BigEndian.Uint64(payload[1:9]))
-		*timestamp = time.Unix(0, tm)
+		*timestamp = rectimestamp
+	}
+	if nonce != nil {
+		*nonce = hex.EncodeToString(payload[7:9])
 	}
 	if hash != nil {
-		*hash = hex.EncodeToString(payload[11:27])
+		*hash = hex.EncodeToString(payload[11:19])
 	}
 	return nil
 }
