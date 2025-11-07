@@ -7,12 +7,27 @@ import (
 	"image"
 
 	"github.com/yyyoichi/watermark_zero/internal/dct"
+	"github.com/yyyoichi/watermark_zero/internal/dwt"
 	"github.com/yyyoichi/watermark_zero/internal/watermark"
 )
 
 var (
 	ErrTooSmallImage = errors.New("image is too small for embedding or extracting")
 )
+
+// Embed embeds a bit sequence into an image with the specified options.
+// This is a convenience function that creates a Watermark instance and calls its Embed method.
+func Embed(ctx context.Context, src image.Image, mark []bool, opts ...Option) (image.Image, error) {
+	w, _ := New(opts...)
+	return w.Embed(ctx, src, mark)
+}
+
+// Extract extracts a bit sequence from an image with the specified options.
+// This is a convenience function that creates a Watermark instance and calls its Extract method.
+func Extract(ctx context.Context, src image.Image, markLen int, opts ...Option) ([]bool, error) {
+	w, _ := New(opts...)
+	return w.Extract(ctx, src, markLen)
+}
 
 type Watermark struct {
 	d1, d2     int
@@ -49,28 +64,6 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 	return watermark.Embed(ctx, img, mark, w.blockShape, w.d1, w.d2, nil, nil)
 }
 
-// BatchEmbed returns a function that can embed watermarks multiple times into the same source image efficiently.
-func (w *Watermark) BatchEmbed(src image.Image) func(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
-	var (
-		original = watermark.NewImageCore(src)
-		wavelets = watermark.Wavelets(original)
-		dctCache = dct.NewCache()
-	)
-
-	var fn = func(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
-		w, err := w.add(opts...)
-		if err != nil {
-			return nil, err
-		}
-		img := original.Copy()
-		if err := watermark.Enable(img, len(mark), w.blockShape); err != nil {
-			return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
-		}
-		return watermark.Embed(ctx, img, mark, w.blockShape, w.d1, w.d2, wavelets, dctCache)
-	}
-	return fn
-}
-
 // Extract extracts a bit sequence from an image.
 //
 // Process:
@@ -89,40 +82,6 @@ func (w *Watermark) Extract(ctx context.Context, src image.Image, markLen int) (
 	return watermark.Extract(ctx, img, markLen, w.blockShape, w.d1, w.d2, nil, nil)
 }
 
-// BatchExtract returns a function that can extract watermarks multiple times from the same source image efficiently.
-func (w *Watermark) BatchExtract(src image.Image) func(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
-	var (
-		original = watermark.NewImageCore(src)
-		wavelets = watermark.Wavelets(original)
-		dctCache = dct.NewCache()
-	)
-
-	var fn = func(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
-		w, err := w.add(opts...)
-		if err != nil {
-			return nil, err
-		}
-		img := original.Copy()
-		if err := watermark.Enable(img, markLen, w.blockShape); err != nil {
-			return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
-		}
-		return watermark.Extract(ctx, img, markLen, w.blockShape, w.d1, w.d2, wavelets, dctCache)
-	}
-	return fn
-}
-
-func (w *Watermark) add(opts ...Option) (*Watermark, error) {
-	var copy = Watermark{
-		d1:         w.d1,
-		d2:         w.d2,
-		blockShape: w.blockShape,
-	}
-	if err := copy.init(opts...); err != nil {
-		return nil, err
-	}
-	return &copy, nil
-}
-
 func (w *Watermark) init(opts ...Option) error {
 	for _, opt := range opts {
 		if err := opt(w); err != nil {
@@ -137,4 +96,45 @@ func (w *Watermark) init(opts ...Option) error {
 		w.blockShape = watermark.NewBlockShape(8, 8)
 	}
 	return nil
+}
+
+// Batch enables efficient multiple watermark operations on a single image
+// by caching intermediate computation results (wavelets and DCT).
+type Batch struct {
+	original watermark.ImageSource
+	wavelets []*dwt.Wavelets
+	dctCache *dct.Cache
+}
+
+// NewBatch creates a new Batch instance and pre-computes wavelet transforms
+// and initializes DCT cache for the given image.
+func NewBatch(src image.Image) *Batch {
+	b := &Batch{
+		original: watermark.NewImageCore(src),
+		dctCache: dct.NewCache(),
+	}
+	b.wavelets = watermark.Wavelets(b.original)
+	return b
+}
+
+// Embed embeds a bit sequence into the cached image with specified options.
+func (b *Batch) Embed(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
+	w, _ := New(opts...)
+	img := b.original.Copy()
+	if err := watermark.Enable(img, len(mark), w.blockShape); err != nil {
+		return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
+	}
+	// Uses pre-computed wavelets and DCT cache for improved performance.
+	return watermark.Embed(ctx, img, mark, w.blockShape, w.d1, w.d2, b.wavelets, b.dctCache)
+}
+
+// Extract extracts a bit sequence from the cached image with specified options.
+func (b *Batch) Extract(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
+	w, _ := New(opts...)
+	img := b.original.Copy()
+	if err := watermark.Enable(img, markLen, w.blockShape); err != nil {
+		return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
+	}
+	// Uses pre-computed wavelets and DCT cache for improved performance.
+	return watermark.Extract(ctx, img, markLen, w.blockShape, w.d1, w.d2, b.wavelets, b.dctCache)
 }
