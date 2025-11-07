@@ -23,12 +23,14 @@ func newImageCore(src image.Image) imageCore {
 	var c imageCore
 	c.bounds = src.Bounds()
 	c.width, c.height = c.bounds.Dx(), c.bounds.Dy()
+	c.waveWidth, c.waveHeight = (c.width+1)/2, (c.height+1)/2
 	c.area = c.width * c.height
 	c.colors = [][]float32{
 		make([]float32, c.area), // Y
 		make([]float32, c.area), // U
 		make([]float32, c.area), // V
 	}
+	c.alpha = make([]uint16, c.area)
 
 	pixels := make([]color.Color, c.area)
 	idx := 0
@@ -91,8 +93,8 @@ func (s blockShape) blockArea() int {
 	return s[0] * s[1]
 }
 
-func (s blockShape) totalBlocks(waveWidth, waveHeight int) int {
-	return (waveWidth / s[0]) * (waveHeight / s[1])
+func (s blockShape) totalBlocks(c imageCore) int {
+	return (c.waveWidth / s[0]) * (c.waveHeight / s[1])
 }
 
 type embedMark []bool

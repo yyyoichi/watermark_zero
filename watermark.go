@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"sync"
 
 	"github.com/yyyoichi/watermark_zero/internal/dct"
 	"github.com/yyyoichi/watermark_zero/internal/dwt"
 	"github.com/yyyoichi/watermark_zero/internal/kmeans"
 	"github.com/yyyoichi/watermark_zero/internal/svd"
-	"github.com/yyyoichi/watermark_zero/internal/yuv"
 )
 
 var (
@@ -20,11 +18,10 @@ var (
 )
 
 type Watermark struct {
-	blockShape [2]int // blockWidth, blockHeight
 	embed      func(s0, s1, bit float64) (r0 float64, r1 float64)
 	extract    func(s0, s1 float64) (v float64)
-	dct        *dct.DCT
-	svd        *svd.SVD
+	blockShape *blockShape
+	dctCache   *dct.Cache
 }
 
 // New initializes a watermark processing structure.
@@ -56,44 +53,20 @@ func New(opts ...Option) (*Watermark, error) {
 // Returns an error if the image is too small for the bit sequence to be embedded.
 func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (image.Image, error) {
 	var (
-		bounds                = src.Bounds()
-		width, height         = bounds.Dx(), bounds.Dy()
-		area                  = width * height
-		waveWidth, waveHeight = (width + 1) / 2, (height + 1) / 2
-		blockArea             = w.blockShape[0] * w.blockShape[1]
-		totalBlocks           = (waveWidth / w.blockShape[0]) * (waveHeight / w.blockShape[1])
-		markLen               = len(mark)
-		getBit                = func(at int) float64 {
-			if mark[at%markLen] {
-				return 1
-			}
-			return 0
-		}
+		img         = newImageCore(src)
+		mk          = embedMark(mark)
+		totalBlocks = w.blockShape.totalBlocks(img)
+		blockArea   = w.blockShape.blockArea()
 	)
-	if totalBlocks < markLen {
-		return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, totalBlocks, markLen)
+	if totalBlocks < mk.len() {
+		return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, totalBlocks, mk.len())
 	}
 
 	var (
-		alpha  = make([]uint16, area)
-		colors = [][]float32{
-			make([]float32, area), // Y
-			make([]float32, area), // U
-			make([]float32, area), // V
-		}
+		blockMap = dwt.NewBlockMap(img.waveWidth, img.waveHeight, w.blockShape[0], w.blockShape[1]).GetMap()
+		dct      = w.dctCache.New(w.blockShape[0], w.blockShape[1])
+		svd      = svd.New(w.blockShape[0], w.blockShape[1])
 	)
-	{
-		pixels := make([]color.Color, area)
-		idx := 0
-		for y := range height {
-			for x := range width {
-				pixels[idx] = src.At(x, y)
-				idx++
-			}
-		}
-		yuv.ColorToYUVBatch(pixels, colors[0], colors[1], colors[2], alpha)
-	}
-	var blockMap = dwt.NewBlockMap(waveWidth, waveHeight, w.blockShape[0], w.blockShape[1]).GetMap()
 	var wg sync.WaitGroup
 	wg.Add(3)
 	for yuv := range 3 {
@@ -101,14 +74,14 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 			defer wg.Done()
 			// The wavelet transform rearranges the row-major slice into blocks that are also arranged in row-major order.
 			// This is designed for efficient slice referencing without slice manipulation during transform and inverse transform operations.
-			wavelets := dwt.HaarDWT(colors[yuv], width, blockMap)
-			colors[yuv] = nil
+			wavelets := dwt.HaarDWT(img.colors[yuv], img.width, blockMap)
+			img.colors[yuv] = nil
 			cA := wavelets[0]
 			for at := range totalBlocks {
 				data := cA[at*blockArea : (at+1)*blockArea : (at+1)*blockArea]
-				bit := getBit(at)
-				d, idct := w.dct.Exec(data)
-				s, isvd, err := w.svd.Exec(d)
+				bit := mk.getBit(at)
+				d, idct := dct.Exec(data)
+				s, isvd, err := svd.Exec(d)
 				if err != nil {
 					return
 				}
@@ -116,24 +89,11 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 				isvd()
 				idct()
 			}
-			colors[yuv] = dwt.HaarIDWT(wavelets, width, height, blockMap)
+			img.colors[yuv] = dwt.HaarIDWT(wavelets, img.width, img.height, blockMap)
 		}(yuv)
 	}
 	wg.Wait()
-
-	var dist = image.NewRGBA64(bounds)
-	{
-		pixels := make([]color.RGBA64, area)
-		idx := 0
-		yuv.YUVToRGBA64Batch(colors[0], colors[1], colors[2], alpha, pixels)
-		for y := range height {
-			for x := range width {
-				dist.SetRGBA64(x, y, pixels[idx])
-				idx++
-			}
-		}
-	}
-	return dist, nil
+	return img.build(), nil
 }
 
 // Extract extracts a bit sequence from an image.
@@ -148,66 +108,43 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 // Returns an error if the image is too small for the expected bit sequence length.
 func (w *Watermark) Extract(ctx context.Context, src image.Image, markLen int) ([]bool, error) {
 	var (
-		bounds                = src.Bounds()
-		width, height         = bounds.Dx(), bounds.Dy()
-		area                  = width * height
-		waveWidth, waveHeight = (width + 1) / 2, (height + 1) / 2
-		blockArea             = w.blockShape[0] * w.blockShape[1]
-		totalBlocks           = (waveWidth / w.blockShape[0]) * (waveHeight / w.blockShape[1])
-		dist                  = make([]kmeans.AverageStore, markLen)
-		setValue              = func(at int, value float64) {
-			dist[at%markLen].Add(value)
-		}
+		img         = newImageCore(src)
+		mk          = newExtractMark(markLen)
+		totalBlocks = w.blockShape.totalBlocks(img)
+		blockArea   = w.blockShape.blockArea()
 	)
-	if totalBlocks < markLen {
-		return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, totalBlocks, markLen)
+	if totalBlocks < mk.len() {
+		return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, totalBlocks, mk.len())
 	}
+
 	var (
-		alpha  = make([]uint16, area)
-		colors = [][]float32{
-			make([]float32, area), // Y
-			make([]float32, area), // U
-			make([]float32, area), // V
-		}
+		blockMap = dwt.NewBlockMap(img.waveWidth, img.waveHeight, w.blockShape[0], w.blockShape[1]).GetMap()
+		dct      = w.dctCache.New(w.blockShape[0], w.blockShape[1])
+		svd      = svd.New(w.blockShape[0], w.blockShape[1])
 	)
-	{
-		pixels := make([]color.Color, area)
-		idx := 0
-		for y := range height {
-			for x := range width {
-				pixels[idx] = src.At(x, y)
-				idx++
-			}
-		}
-		yuv.ColorToYUVBatch(pixels, colors[0], colors[1], colors[2], alpha)
-	}
-	var blockMap = dwt.NewBlockMap(waveWidth, waveHeight, w.blockShape[0], w.blockShape[1]).GetMap()
 	var wg sync.WaitGroup
 	wg.Add(3)
 	for yuv := range 3 {
 		go func(yuv int) {
 			defer wg.Done()
-			wavelets := dwt.HaarDWT(colors[yuv], width, blockMap)
-			colors[yuv] = nil
+			wavelets := dwt.HaarDWT(img.colors[yuv], img.width, blockMap)
+			img.colors[yuv] = nil
 			cA := wavelets[0]
 			for at := range totalBlocks {
 				data := cA[at*blockArea : (at+1)*blockArea : (at+1)*blockArea]
-				d, _ := w.dct.Exec(data)
-				s, _, err := w.svd.Exec(d)
+				d, _ := dct.Exec(data)
+				s, _, err := svd.Exec(d)
 				if err != nil {
 					return
 				}
 				v := w.extract(s[0], s[1])
-				setValue(at, v)
+				mk.setBit(at, v)
 			}
 		}(yuv)
 	}
 	wg.Wait()
 
-	avrs := make([]float64, markLen)
-	for i := range dist {
-		avrs[i] = dist[i].Average()
-	}
+	avrs := mk.averages()
 	return kmeans.OneDimKmeans(avrs), nil
 }
 
@@ -256,7 +193,6 @@ func (w *Watermark) setExtractD1D2(d1, d2 int) error {
 
 func (w *Watermark) init() error {
 	defaultD1, defaultD2 := 36, 20
-	defaultShape := [2]int{4, 4}
 	if w.embed == nil || w.extract == nil {
 		if err := w.setEmbedD1D2(defaultD1, defaultD2); err != nil {
 			return err
@@ -265,10 +201,12 @@ func (w *Watermark) init() error {
 			return err
 		}
 	}
-	if w.dct == nil || w.svd == nil {
-		w.blockShape = defaultShape
-		w.dct = dct.New(defaultShape[0], defaultShape[1])
-		w.svd = svd.New(defaultShape[0], defaultShape[1])
+	if w.dctCache == nil {
+		w.dctCache = dct.NewCache()
+	}
+	if w.blockShape == nil {
+		s := newBlockShape(4, 4)
+		w.blockShape = &s
 	}
 	return nil
 }

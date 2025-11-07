@@ -1,10 +1,5 @@
 package watermark
 
-import (
-	"github.com/yyyoichi/watermark_zero/internal/dct"
-	"github.com/yyyoichi/watermark_zero/internal/svd"
-)
-
 type Option func(*Watermark) error
 
 // WithBlockShape divides the image into blocks of the specified size for processing.
@@ -15,22 +10,9 @@ type Option func(*Watermark) error
 // If odd numbers are provided, they are automatically rounded up to the next even number.
 // If values smaller than 4 are provided, they are set to 4.
 func WithBlockShape(width, height int) Option {
-	if width%2 != 0 {
-		width += 1
-	}
-	if height%2 != 0 {
-		height += 1
-	}
-	if width < 4 {
-		width = 4
-	}
-	if height < 4 {
-		height = 4
-	}
 	return func(w *Watermark) error {
-		w.blockShape = [2]int{width / 2, height / 2}
-		w.dct = dct.New(width/2, height/2)
-		w.svd = svd.New(width/2, height/2)
+		s := newBlockShape(width, height)
+		w.blockShape = &s
 		return nil
 	}
 }
