@@ -101,7 +101,7 @@ func TestDWT_HaarDWT(t *testing.T) {
 				indexMap := dwt.NewBlockMap(tt.Input.Width/2, tt.Input.Height/2, b[0], b[1]).GetMap()
 				want := dwt.HaarDWT(tt.Input.Data, tt.Input.Width, indexMap)
 				wavelets := dwt.New(tt.Input.Data, tt.Input.Width)
-				got := wavelets.Get(b[0], b[1])
+				got := wavelets.Get(indexMap)
 				require.Equal(t, want, got, "Wavelets mismatch ", b[0], b[1])
 			}
 		})

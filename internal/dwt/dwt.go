@@ -105,7 +105,7 @@ func New(data []float32, w int) *Wavelets {
 	return &wavelets
 }
 
-func (w *Wavelets) Get(blockW, blockH int) [][]float32 {
+func (w *Wavelets) Get(indexMap []int) [][]float32 {
 	l := w.hw * w.hh
 	result := [][]float32{
 		make([]float32, l),
@@ -113,7 +113,12 @@ func (w *Wavelets) Get(blockW, blockH int) [][]float32 {
 		make([]float32, l),
 		make([]float32, l),
 	}
-	indexMap := NewBlockMap(w.hw, w.hh, blockW, blockH).GetMap()
+	if indexMap == nil || len(indexMap) != l {
+		indexMap = make([]int, l)
+		for i := range l {
+			indexMap[i] = i
+		}
+	}
 	for j, o := range w.original {
 		for i, v := range o {
 			idx := indexMap[i]

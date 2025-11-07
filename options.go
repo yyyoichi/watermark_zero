@@ -1,5 +1,9 @@
 package watermark
 
+import (
+	"github.com/yyyoichi/watermark_zero/internal/watermark"
+)
+
 type Option func(*Watermark) error
 
 // WithBlockShape divides the image into blocks of the specified size for processing.
@@ -11,8 +15,7 @@ type Option func(*Watermark) error
 // If values smaller than 4 are provided, they are set to 4.
 func WithBlockShape(width, height int) Option {
 	return func(w *Watermark) error {
-		s := newBlockShape(width, height)
-		w.blockShape = &s
+		w.blockShape = watermark.NewBlockShape(width, height)
 		return nil
 	}
 }
@@ -22,12 +25,7 @@ func WithBlockShape(width, height int) Option {
 // This option has less computational cost than WithD1D2 but may have lower robustness in comparison.
 func WithD1(d1 int) Option {
 	return func(w *Watermark) error {
-		if err := w.setEmbedD1(d1); err != nil {
-			return err
-		}
-		if err := w.setExtractD1(d1); err != nil {
-			return err
-		}
+		w.d1, w.d2 = d1, -1
 		return nil
 	}
 }
@@ -37,12 +35,7 @@ func WithD1(d1 int) Option {
 // This option has higher computational cost than WithD1 but may provide better robustness.
 func WithD1D2(d1, d2 int) Option {
 	return func(w *Watermark) error {
-		if err := w.setEmbedD1D2(d1, d2); err != nil {
-			return err
-		}
-		if err := w.setExtractD1D2(d1, d2); err != nil {
-			return err
-		}
+		w.d1, w.d2 = d1, d2
 		return nil
 	}
 }
