@@ -4,55 +4,54 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"image/color"
 
 	watermark "github.com/yyyoichi/watermark_zero"
 	"github.com/yyyoichi/watermark_zero/strmark"
 )
 
 func Example_watermark() {
-	// Create a simple gradient image (200x200 pixels)
-	img := image.NewRGBA(image.Rect(0, 0, 200, 200))
-	for y := 0; y < img.Bounds().Dy(); y++ {
-		for x := 0; x < img.Bounds().Dx(); x++ {
-			// Create gradient effect: red increases with x, green increases with y, blue is a mix
-			r := uint8(x * 255 / 100)
-			g := uint8(y * 255 / 100)
-			b := uint8((x + y) * 255 / 200)
-			img.Set(x, y, color.RGBA{r, g, b, 255})
-		}
-	}
-
+	ctx := context.Background()
+	img := image.NewGray(image.Rect(0, 0, 200, 200))
 	// Initialize watermark processor with default settings
-	w, err := watermark.New(
+	w, _ := watermark.New(
 		watermark.WithBlockShape(4, 6),
 		watermark.WithD1D2(36, 20),
 	)
-	if err != nil {
-		fmt.Printf("Error creating watermark: %v\n", err)
-		return
-	}
 
 	// Define a bit sequence to embed
 	mark := strmark.Encode("Test-Mark")
 
 	// Embed the watermark
-	ctx := context.Background()
-	markedImg, err := w.Embed(ctx, img, mark)
-	if err != nil {
-		fmt.Printf("Error embedding watermark: %v\n", err)
-		return
-	}
+	markedImg, _ := w.Embed(ctx, img, mark)
 
 	// Extract the watermark
-	extractedMark, err := w.Extract(ctx, markedImg, len(mark))
-	if err != nil {
-		fmt.Printf("Error extracting watermark: %v\n", err)
-		return
-	}
-
+	extractedMark, _ := w.Extract(ctx, markedImg, len(mark))
 	fmt.Println(strmark.Decode(extractedMark))
 
 	// Output:
 	// Test-Mark
+}
+
+func Example_batch() {
+	ctx := context.Background()
+	img := image.NewGray(image.Rect(0, 0, 200, 200))
+
+	opts := []watermark.Option{
+		watermark.WithBlockShape(4, 4),
+		watermark.WithD1D2(32, 18),
+	}
+
+	batch := watermark.NewBatch(img)
+	for _, m := range []string{"Hello!", "こんにちは！"} {
+		mark := strmark.Encode(m)
+		markedImg, _ := batch.Embed(ctx, mark, opts...)
+
+		extractedMark, _ := watermark.Extract(ctx, markedImg, len(mark), opts...)
+
+		fmt.Println(strmark.Decode(extractedMark))
+	}
+
+	// Output:
+	// Hello!
+	// こんにちは！
 }
