@@ -29,12 +29,7 @@ type Watermark struct {
 // For default values, refer to the init function.
 func New(opts ...Option) (*Watermark, error) {
 	w := new(Watermark)
-	for _, opt := range opts {
-		if err := opt(w); err != nil {
-			return nil, err
-		}
-	}
-	if err := w.init(); err != nil {
+	if err := w.init(opts...); err != nil {
 		return nil, err
 	}
 	return w, nil
@@ -94,6 +89,70 @@ func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (im
 	}
 	wg.Wait()
 	return img.build(), nil
+}
+
+func (w *Watermark) BatchEmbed(src image.Image) func(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
+	var (
+		original = newImageCore(src)
+		wavelets = make([]*dwt.Wavelets, 3)
+		dctCache = w.dctCache
+	)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	for yuv := range 3 {
+		go func(yuv int) {
+			defer wg.Done()
+			wavelets[yuv] = dwt.New(original.colors[yuv], original.width)
+		}(yuv)
+	}
+	wg.Wait()
+
+	var fn = func(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
+		var w = Watermark{
+			dctCache: dctCache,
+		}
+		if err := w.init(); err != nil {
+			return nil, err
+		}
+		var (
+			img         = original.copy()
+			mk          = embedMark(mark)
+			totalBlocks = w.blockShape.totalBlocks(img)
+			blockArea   = w.blockShape.blockArea()
+		)
+		if totalBlocks < mk.len() {
+			return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, totalBlocks, mk.len())
+		}
+		var (
+			blockMap = dwt.NewBlockMap(img.waveWidth, img.waveHeight, w.blockShape[0], w.blockShape[1]).GetMap()
+			dct      = w.dctCache.New(w.blockShape[0], w.blockShape[1])
+			svd      = svd.New(w.blockShape[0], w.blockShape[1])
+		)
+		var wg sync.WaitGroup
+		wg.Add(3)
+		for yuv := range 3 {
+			go func(yuv int) {
+				defer wg.Done()
+				ws := wavelets[yuv].Get(w.blockShape[0], w.blockShape[1])
+				cA := ws[0]
+				for at := range totalBlocks {
+					data := cA[at*blockArea : (at+1)*blockArea : (at+1)*blockArea]
+					bit := mk.getBit(at)
+					d, idct := dct.Exec(data)
+					s, isvd, err := svd.Exec(d)
+					if err != nil {
+						return
+					}
+					s[0], s[1] = w.embed(s[0], s[1], bit)
+					isvd()
+					idct()
+				}
+				img.colors[yuv] = dwt.HaarIDWT(ws, img.width, img.height, blockMap)
+			}(yuv)
+		}
+		return img.build(), nil
+	}
+	return fn
 }
 
 // Extract extracts a bit sequence from an image.
@@ -191,7 +250,12 @@ func (w *Watermark) setExtractD1D2(d1, d2 int) error {
 	return nil
 }
 
-func (w *Watermark) init() error {
+func (w *Watermark) init(opts ...Option) error {
+	for _, opt := range opts {
+		if err := opt(w); err != nil {
+			return err
+		}
+	}
 	defaultD1, defaultD2 := 36, 20
 	if w.embed == nil || w.extract == nil {
 		if err := w.setEmbedD1D2(defaultD1, defaultD2); err != nil {
