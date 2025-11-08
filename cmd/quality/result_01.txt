@@ -1,0 +1,115 @@
+go run cmd/quality/main.go -n 1
+2025/11/08 05:13:09 Starting quality evaluation with 1 images
+2025/11/08 05:13:09 Total test cases per image: 5 (image sizes) x 5 (block shapes) x 4 (d1/d2 pairs) = 100
+2025/11/08 05:13:09 
+[1/1] Testing image: https://images.pexels.com/photos/2325447/pexels-photo-2325447.jpeg
+2025/11/08 05:13:09   Size: 1920x1080
+2025/11/08 05:13:15     [OK] Size=1920x1080 BlockShape=4x4 D1D2=36x20 EmbedCount=195.18 TotalBlocks=129600 - Accuracy=100.0% Time=4.368957658s
+2025/11/08 05:13:19     [OK] Size=1920x1080 BlockShape=4x4 D1D2=30x17 EmbedCount=195.18 TotalBlocks=129600 - Accuracy=100.0% Time=4.266955423s
+2025/11/08 05:13:23     [OK] Size=1920x1080 BlockShape=4x4 D1D2=25x14 EmbedCount=195.18 TotalBlocks=129600 - Accuracy=100.0% Time=4.435227256s
+2025/11/08 05:13:27     [OK] Size=1920x1080 BlockShape=4x4 D1D2=20x11 EmbedCount=195.18 TotalBlocks=129600 - Accuracy=100.0% Time=4.174828484s
+2025/11/08 05:13:31     [OK] Size=1920x1080 BlockShape=4x6 D1D2=36x20 EmbedCount=130.12 TotalBlocks=86400 - Accuracy=100.0% Time=3.872477837s
+2025/11/08 05:13:35     [OK] Size=1920x1080 BlockShape=4x6 D1D2=30x17 EmbedCount=130.12 TotalBlocks=86400 - Accuracy=100.0% Time=3.87276982s
+2025/11/08 05:13:39     [OK] Size=1920x1080 BlockShape=4x6 D1D2=25x14 EmbedCount=130.12 TotalBlocks=86400 - Accuracy=100.0% Time=3.747724495s
+2025/11/08 05:13:43     [OK] Size=1920x1080 BlockShape=4x6 D1D2=20x11 EmbedCount=130.12 TotalBlocks=86400 - Accuracy=100.0% Time=3.708703085s
+2025/11/08 05:13:46     [OK] Size=1920x1080 BlockShape=6x6 D1D2=36x20 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=3.297706954s
+2025/11/08 05:13:49     [OK] Size=1920x1080 BlockShape=6x6 D1D2=30x17 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=3.304535415s
+2025/11/08 05:13:53     [OK] Size=1920x1080 BlockShape=6x6 D1D2=25x14 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=3.395359814s
+2025/11/08 05:13:56     [OK] Size=1920x1080 BlockShape=6x6 D1D2=20x11 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=3.255929595s
+2025/11/08 05:13:59     [OK] Size=1920x1080 BlockShape=6x8 D1D2=36x20 EmbedCount=65.06 TotalBlocks=43200 - Accuracy=100.0% Time=3.114008799s
+2025/11/08 05:14:02     [OK] Size=1920x1080 BlockShape=6x8 D1D2=30x17 EmbedCount=65.06 TotalBlocks=43200 - Accuracy=100.0% Time=3.188480312s
+2025/11/08 05:14:05     [OK] Size=1920x1080 BlockShape=6x8 D1D2=25x14 EmbedCount=65.06 TotalBlocks=43200 - Accuracy=100.0% Time=3.263487049s
+2025/11/08 05:14:09     [OK] Size=1920x1080 BlockShape=6x8 D1D2=20x11 EmbedCount=65.06 TotalBlocks=43200 - Accuracy=100.0% Time=3.172849029s
+2025/11/08 05:14:12     [OK] Size=1920x1080 BlockShape=8x8 D1D2=36x20 EmbedCount=48.80 TotalBlocks=32400 - Accuracy=100.0% Time=2.98473421s
+2025/11/08 05:14:15     [OK] Size=1920x1080 BlockShape=8x8 D1D2=30x17 EmbedCount=48.80 TotalBlocks=32400 - Accuracy=100.0% Time=3.005153968s
+2025/11/08 05:14:18     [OK] Size=1920x1080 BlockShape=8x8 D1D2=25x14 EmbedCount=48.80 TotalBlocks=32400 - Accuracy=100.0% Time=2.994775449s
+2025/11/08 05:14:21     [OK] Size=1920x1080 BlockShape=8x8 D1D2=20x11 EmbedCount=48.80 TotalBlocks=32400 - Accuracy=100.0% Time=3.015966314s
+2025/11/08 05:14:21   Size: 1280x720
+2025/11/08 05:14:23     [OK] Size=1280x720 BlockShape=4x4 D1D2=36x20 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=1.985357294s
+2025/11/08 05:14:25     [OK] Size=1280x720 BlockShape=4x4 D1D2=30x17 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=1.996874721s
+2025/11/08 05:14:27     [OK] Size=1280x720 BlockShape=4x4 D1D2=25x14 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=1.916731417s
+2025/11/08 05:14:29     [OK] Size=1280x720 BlockShape=4x4 D1D2=20x11 EmbedCount=86.75 TotalBlocks=57600 - Accuracy=100.0% Time=1.960127648s
+2025/11/08 05:14:30     [OK] Size=1280x720 BlockShape=4x6 D1D2=36x20 EmbedCount=57.74 TotalBlocks=38340 - Accuracy=100.0% Time=1.672717223s
+2025/11/08 05:14:32     [OK] Size=1280x720 BlockShape=4x6 D1D2=30x17 EmbedCount=57.74 TotalBlocks=38340 - Accuracy=100.0% Time=1.856996656s
+2025/11/08 05:14:34     [OK] Size=1280x720 BlockShape=4x6 D1D2=25x14 EmbedCount=57.74 TotalBlocks=38340 - Accuracy=100.0% Time=1.766400658s
+2025/11/08 05:14:36     [OK] Size=1280x720 BlockShape=4x6 D1D2=20x11 EmbedCount=57.74 TotalBlocks=38340 - Accuracy=100.0% Time=1.796739332s
+2025/11/08 05:14:38     [OK] Size=1280x720 BlockShape=6x6 D1D2=36x20 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=1.838803616s
+2025/11/08 05:14:39     [OK] Size=1280x720 BlockShape=6x6 D1D2=30x17 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=1.565552547s
+2025/11/08 05:14:41     [OK] Size=1280x720 BlockShape=6x6 D1D2=25x14 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=1.564992726s
+2025/11/08 05:14:42     [OK] Size=1280x720 BlockShape=6x6 D1D2=20x11 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=1.611444707s
+2025/11/08 05:14:44     [OK] Size=1280x720 BlockShape=6x8 D1D2=36x20 EmbedCount=28.92 TotalBlocks=19200 - Accuracy=100.0% Time=1.548670332s
+2025/11/08 05:14:45     [OK] Size=1280x720 BlockShape=6x8 D1D2=30x17 EmbedCount=28.92 TotalBlocks=19200 - Accuracy=100.0% Time=1.485859634s
+2025/11/08 05:14:47     [OK] Size=1280x720 BlockShape=6x8 D1D2=25x14 EmbedCount=28.92 TotalBlocks=19200 - Accuracy=100.0% Time=1.464538432s
+2025/11/08 05:14:48     [OK] Size=1280x720 BlockShape=6x8 D1D2=20x11 EmbedCount=28.92 TotalBlocks=19200 - Accuracy=100.0% Time=1.575900952s
+2025/11/08 05:14:50     [OK] Size=1280x720 BlockShape=8x8 D1D2=36x20 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=1.362753533s
+2025/11/08 05:14:51     [OK] Size=1280x720 BlockShape=8x8 D1D2=30x17 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=1.420798543s
+2025/11/08 05:14:53     [OK] Size=1280x720 BlockShape=8x8 D1D2=25x14 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=1.583220769s
+2025/11/08 05:14:54     [OK] Size=1280x720 BlockShape=8x8 D1D2=20x11 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=1.412568948s
+2025/11/08 05:14:54   Size: 854x480
+2025/11/08 05:14:55     [OK] Size=854x480 BlockShape=4x4 D1D2=36x20 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=880.144279ms
+2025/11/08 05:14:56     [OK] Size=854x480 BlockShape=4x4 D1D2=30x17 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=957.554464ms
+2025/11/08 05:14:57     [OK] Size=854x480 BlockShape=4x4 D1D2=25x14 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=907.664413ms
+2025/11/08 05:14:58     [OK] Size=854x480 BlockShape=4x4 D1D2=20x11 EmbedCount=38.49 TotalBlocks=25560 - Accuracy=100.0% Time=997.602166ms
+2025/11/08 05:14:59     [OK] Size=854x480 BlockShape=4x6 D1D2=36x20 EmbedCount=25.66 TotalBlocks=17040 - Accuracy=100.0% Time=864.719782ms
+2025/11/08 05:15:00     [OK] Size=854x480 BlockShape=4x6 D1D2=30x17 EmbedCount=25.66 TotalBlocks=17040 - Accuracy=100.0% Time=852.225983ms
+2025/11/08 05:15:01     [OK] Size=854x480 BlockShape=4x6 D1D2=25x14 EmbedCount=25.66 TotalBlocks=17040 - Accuracy=100.0% Time=850.311332ms
+2025/11/08 05:15:02     [OK] Size=854x480 BlockShape=4x6 D1D2=20x11 EmbedCount=25.66 TotalBlocks=17040 - Accuracy=100.0% Time=829.589065ms
+2025/11/08 05:15:02     [OK] Size=854x480 BlockShape=6x6 D1D2=36x20 EmbedCount=17.11 TotalBlocks=11360 - Accuracy=100.0% Time=861.900193ms
+2025/11/08 05:15:03     [OK] Size=854x480 BlockShape=6x6 D1D2=30x17 EmbedCount=17.11 TotalBlocks=11360 - Accuracy=100.0% Time=734.169271ms
+2025/11/08 05:15:04     [OK] Size=854x480 BlockShape=6x6 D1D2=25x14 EmbedCount=17.11 TotalBlocks=11360 - Accuracy=100.0% Time=784.1774ms
+2025/11/08 05:15:05     [OK] Size=854x480 BlockShape=6x6 D1D2=20x11 EmbedCount=17.11 TotalBlocks=11360 - Accuracy=100.0% Time=851.472134ms
+2025/11/08 05:15:06     [OK] Size=854x480 BlockShape=6x8 D1D2=36x20 EmbedCount=12.77 TotalBlocks=8480 - Accuracy=100.0% Time=743.002757ms
+2025/11/08 05:15:06     [OK] Size=854x480 BlockShape=6x8 D1D2=30x17 EmbedCount=12.77 TotalBlocks=8480 - Accuracy=100.0% Time=792.762642ms
+2025/11/08 05:15:07     [OK] Size=854x480 BlockShape=6x8 D1D2=25x14 EmbedCount=12.77 TotalBlocks=8480 - Accuracy=100.0% Time=801.474021ms
+2025/11/08 05:15:08     [OK] Size=854x480 BlockShape=6x8 D1D2=20x11 EmbedCount=12.77 TotalBlocks=8480 - Accuracy=100.0% Time=749.876749ms
+2025/11/08 05:15:09     [OK] Size=854x480 BlockShape=8x8 D1D2=36x20 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=716.269248ms
+2025/11/08 05:15:09     [OK] Size=854x480 BlockShape=8x8 D1D2=30x17 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=681.775703ms
+2025/11/08 05:15:10     [OK] Size=854x480 BlockShape=8x8 D1D2=25x14 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=724.045461ms
+2025/11/08 05:15:11     [FAIL] Size=854x480 BlockShape=8x8 D1D2=20x11 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=99.8% Time=805.187634ms
+2025/11/08 05:15:11   Size: 640x360
+2025/11/08 05:15:11     [OK] Size=640x360 BlockShape=4x4 D1D2=36x20 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=597.504021ms
+2025/11/08 05:15:12     [OK] Size=640x360 BlockShape=4x4 D1D2=30x17 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=720.014385ms
+2025/11/08 05:15:13     [OK] Size=640x360 BlockShape=4x4 D1D2=25x14 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=581.970605ms
+2025/11/08 05:15:13     [OK] Size=640x360 BlockShape=4x4 D1D2=20x11 EmbedCount=21.69 TotalBlocks=14400 - Accuracy=100.0% Time=631.898254ms
+2025/11/08 05:15:14     [OK] Size=640x360 BlockShape=4x6 D1D2=36x20 EmbedCount=14.37 TotalBlocks=9540 - Accuracy=100.0% Time=533.427965ms
+2025/11/08 05:15:14     [OK] Size=640x360 BlockShape=4x6 D1D2=30x17 EmbedCount=14.37 TotalBlocks=9540 - Accuracy=100.0% Time=569.885998ms
+2025/11/08 05:15:15     [OK] Size=640x360 BlockShape=4x6 D1D2=25x14 EmbedCount=14.37 TotalBlocks=9540 - Accuracy=100.0% Time=546.928635ms
+2025/11/08 05:15:16     [OK] Size=640x360 BlockShape=4x6 D1D2=20x11 EmbedCount=14.37 TotalBlocks=9540 - Accuracy=100.0% Time=557.522189ms
+2025/11/08 05:15:16     [FAIL] Size=640x360 BlockShape=6x6 D1D2=36x20 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=99.8% Time=510.340658ms
+2025/11/08 05:15:17     [OK] Size=640x360 BlockShape=6x6 D1D2=30x17 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=484.495467ms
+2025/11/08 05:15:17     [OK] Size=640x360 BlockShape=6x6 D1D2=25x14 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=468.456483ms
+2025/11/08 05:15:18     [OK] Size=640x360 BlockShape=6x6 D1D2=20x11 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=472.182626ms
+2025/11/08 05:15:18     [OK] Size=640x360 BlockShape=6x8 D1D2=36x20 EmbedCount=7.23 TotalBlocks=4800 - Accuracy=100.0% Time=457.119832ms
+2025/11/08 05:15:18     [OK] Size=640x360 BlockShape=6x8 D1D2=30x17 EmbedCount=7.23 TotalBlocks=4800 - Accuracy=100.0% Time=470.457151ms
+2025/11/08 05:15:19     [OK] Size=640x360 BlockShape=6x8 D1D2=25x14 EmbedCount=7.23 TotalBlocks=4800 - Accuracy=100.0% Time=438.191247ms
+2025/11/08 05:15:19     [OK] Size=640x360 BlockShape=6x8 D1D2=20x11 EmbedCount=7.23 TotalBlocks=4800 - Accuracy=100.0% Time=460.641716ms
+2025/11/08 05:15:20     [OK] Size=640x360 BlockShape=8x8 D1D2=36x20 EmbedCount=5.42 TotalBlocks=3600 - Accuracy=100.0% Time=413.919363ms
+2025/11/08 05:15:20     [FAIL] Size=640x360 BlockShape=8x8 D1D2=30x17 EmbedCount=5.42 TotalBlocks=3600 - Accuracy=99.5% Time=419.249342ms
+2025/11/08 05:15:21     [FAIL] Size=640x360 BlockShape=8x8 D1D2=25x14 EmbedCount=5.42 TotalBlocks=3600 - Accuracy=99.8% Time=403.382001ms
+2025/11/08 05:15:21     [FAIL] Size=640x360 BlockShape=8x8 D1D2=20x11 EmbedCount=5.42 TotalBlocks=3600 - Accuracy=99.4% Time=385.431315ms
+2025/11/08 05:15:21   Size: 426x240
+2025/11/08 05:15:21     [FAIL] Size=426x240 BlockShape=4x4 D1D2=36x20 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=99.8% Time=291.707516ms
+2025/11/08 05:15:22     [OK] Size=426x240 BlockShape=4x4 D1D2=30x17 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=317.088392ms
+2025/11/08 05:15:22     [OK] Size=426x240 BlockShape=4x4 D1D2=25x14 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=100.0% Time=394.870442ms
+2025/11/08 05:15:22     [FAIL] Size=426x240 BlockShape=4x4 D1D2=20x11 EmbedCount=9.58 TotalBlocks=6360 - Accuracy=99.5% Time=343.297428ms
+2025/11/08 05:15:23     [FAIL] Size=426x240 BlockShape=4x6 D1D2=36x20 EmbedCount=6.42 TotalBlocks=4260 - Accuracy=99.7% Time=308.153641ms
+2025/11/08 05:15:23     [FAIL] Size=426x240 BlockShape=4x6 D1D2=30x17 EmbedCount=6.42 TotalBlocks=4260 - Accuracy=99.8% Time=303.775423ms
+2025/11/08 05:15:23     [FAIL] Size=426x240 BlockShape=4x6 D1D2=25x14 EmbedCount=6.42 TotalBlocks=4260 - Accuracy=99.7% Time=266.661473ms
+2025/11/08 05:15:24     [FAIL] Size=426x240 BlockShape=4x6 D1D2=20x11 EmbedCount=6.42 TotalBlocks=4260 - Accuracy=99.8% Time=330.777054ms
+2025/11/08 05:15:24     [FAIL] Size=426x240 BlockShape=6x6 D1D2=36x20 EmbedCount=4.28 TotalBlocks=2840 - Accuracy=98.6% Time=257.944991ms
+2025/11/08 05:15:24     [FAIL] Size=426x240 BlockShape=6x6 D1D2=30x17 EmbedCount=4.28 TotalBlocks=2840 - Accuracy=99.5% Time=299.007983ms
+2025/11/08 05:15:24     [FAIL] Size=426x240 BlockShape=6x6 D1D2=25x14 EmbedCount=4.28 TotalBlocks=2840 - Accuracy=99.1% Time=338.445051ms
+2025/11/08 05:15:25     [FAIL] Size=426x240 BlockShape=6x6 D1D2=20x11 EmbedCount=4.28 TotalBlocks=2840 - Accuracy=98.8% Time=336.35401ms
+2025/11/08 05:15:25     [FAIL] Size=426x240 BlockShape=6x8 D1D2=36x20 EmbedCount=3.19 TotalBlocks=2120 - Accuracy=97.0% Time=277.158471ms
+2025/11/08 05:15:25     [FAIL] Size=426x240 BlockShape=6x8 D1D2=30x17 EmbedCount=3.19 TotalBlocks=2120 - Accuracy=99.2% Time=221.495155ms
+2025/11/08 05:15:26     [FAIL] Size=426x240 BlockShape=6x8 D1D2=25x14 EmbedCount=3.19 TotalBlocks=2120 - Accuracy=99.1% Time=219.056702ms
+2025/11/08 05:15:26     [FAIL] Size=426x240 BlockShape=6x8 D1D2=20x11 EmbedCount=3.19 TotalBlocks=2120 - Accuracy=98.3% Time=214.499685ms
+2025/11/08 05:15:26     [FAIL] Size=426x240 BlockShape=8x8 D1D2=36x20 EmbedCount=2.39 TotalBlocks=1590 - Accuracy=95.9% Time=210.336643ms
+2025/11/08 05:15:26     [FAIL] Size=426x240 BlockShape=8x8 D1D2=30x17 EmbedCount=2.39 TotalBlocks=1590 - Accuracy=98.3% Time=214.854098ms
+2025/11/08 05:15:26     [FAIL] Size=426x240 BlockShape=8x8 D1D2=25x14 EmbedCount=2.39 TotalBlocks=1590 - Accuracy=97.0% Time=211.971036ms
+2025/11/08 05:15:27     [FAIL] Size=426x240 BlockShape=8x8 D1D2=20x11 EmbedCount=2.39 TotalBlocks=1590 - Accuracy=96.2% Time=194.472457ms
+2025/11/08 05:15:27 
+=== Results ===
+2025/11/08 05:15:27 Total tests: 100
+2025/11/08 05:15:27 Successful: 77 (77.00%)
+2025/11/08 05:15:27 Failed: 23 (23.00%)

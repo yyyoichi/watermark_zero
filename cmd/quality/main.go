@@ -23,6 +23,7 @@ import (
 
 	"github.com/yyyoichi/httpcache-go"
 	watermark "github.com/yyyoichi/watermark_zero"
+	innerwatermark "github.com/yyyoichi/watermark_zero/internal/watermark"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 	"golang.org/x/image/draw"
 )
@@ -141,6 +142,12 @@ type TestParams struct {
 	BlockShapeW int
 	D1          int
 	D2          int
+
+	// meta
+	ImageWidth  int
+	EmbedCount  float64
+	ImageHeight int
+	TotalBlocks int
 }
 
 func main() {
@@ -150,7 +157,15 @@ func main() {
 
 	ctx := context.Background()
 
-	// Test parameters: 5 block shapes × 4 d1/d2 settings
+	// Test parameters: 5 image sizes × 5 block shapes × 4 d1/d2 settings
+	imageSizes := [][]int{
+		{1920, 1080}, // FHD
+		{1280, 720},  // HD
+		{854, 480},   // 480p
+		{640, 360},   // 360p
+		{426, 240},   // 240p
+	}
+
 	blockShapes := [][]int{
 		{4, 4},
 		{4, 6},
@@ -189,8 +204,8 @@ func main() {
 	}
 
 	log.Printf("Starting quality evaluation with %d images\n", len(urls))
-	log.Printf("Total test cases per image: %d (block shapes) x %d (d1/d2 pairs) = %d\n",
-		len(blockShapes), len(d1d2Pairs), len(blockShapes)*len(d1d2Pairs))
+	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
+		len(imageSizes), len(blockShapes), len(d1d2Pairs), len(imageSizes)*len(blockShapes)*len(d1d2Pairs))
 
 	successCount := 0
 	totalTests := 0
@@ -198,27 +213,38 @@ func main() {
 	for i, url := range urls {
 		log.Printf("\n[%d/%d] Testing image: %s\n", i+1, len(urls), url)
 
-		img, err := fetchImage(url)
-		if err != nil {
-			log.Printf("  Error fetching image: %v\n", err)
-			continue
-		}
+		for _, size := range imageSizes {
+			width, height := size[0], size[1]
+			log.Printf("  Size: %dx%d\n", width, height)
 
-		batch := watermark.NewBatch(img)
+			img, err := fetchImageWithSize(url, width, height)
+			if err != nil {
+				log.Printf("    Error fetching image: %v\n", err)
+				continue
+			}
 
-		for _, bs := range blockShapes {
-			for _, d1d2 := range d1d2Pairs {
-				params := TestParams{
-					BlockShapeH: bs[0],
-					BlockShapeW: bs[1],
-					D1:          d1d2[0],
-					D2:          d1d2[1],
-				}
+			batch := watermark.NewBatch(img)
+			rect := img.Bounds()
 
-				totalTests++
-				success := testWatermark(ctx, batch, testMark, params)
-				if success {
-					successCount++
+			for _, bs := range blockShapes {
+				for _, d1d2 := range d1d2Pairs {
+					params := TestParams{
+						BlockShapeH: bs[0],
+						BlockShapeW: bs[1],
+						D1:          d1d2[0],
+						D2:          d1d2[1],
+
+						TotalBlocks: innerwatermark.TotalBlocks(rect, innerwatermark.NewBlockShape(bs[1], bs[0])),
+						ImageWidth:  width,
+						ImageHeight: height,
+					}
+					params.EmbedCount = float64(params.TotalBlocks) / float64(len(testMark))
+
+					totalTests++
+					success := testWatermark(ctx, batch, testMark, params)
+					if success {
+						successCount++
+					}
 				}
 			}
 		}
@@ -242,12 +268,13 @@ func parseURLs(data string) []string {
 	return urls
 }
 
-func fetchImage(url string) (image.Image, error) {
-	// Add FHD resolution parameters (1920x1080)
+func fetchImageWithSize(url string, width, height int) (image.Image, error) {
+	// Add resolution parameters
+	sizeParams := fmt.Sprintf("w=%d&h=%d", width, height)
 	if strings.Contains(url, "?") {
-		url += "&w=1920&h=1080"
+		url += "&" + sizeParams
 	} else {
-		url += "?w=1920&h=1080"
+		url += "?" + sizeParams
 	}
 
 	resp, err := client.Get(url)
@@ -279,30 +306,30 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	// Embed
 	markedImg, err := batch.Embed(ctx, mark, opts...)
 	if err != nil {
-		log.Printf("  [FAIL] BlockShape=%dx%d D1D2=%dx%d - Embed error: %v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, err)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Embed error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
 		return false
 	}
 
 	// JPEG compression and decode with quality 100
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, markedImg, &jpeg.Options{Quality: 100}); err != nil {
-		log.Printf("  [FAIL] BlockShape=%dx%d D1D2=%dx%d - JPEG encode error: %v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, err)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG encode error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
 		return false
 	}
 	compressedImg, err := jpeg.Decode(&buf)
 	if err != nil {
-		log.Printf("  [FAIL] BlockShape=%dx%d D1D2=%dx%d - JPEG decode error: %v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, err)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG decode error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
 		return false
 	}
 
 	// Extract
 	extracted, err := watermark.Extract(ctx, compressedImg, len(mark), opts...)
 	if err != nil {
-		log.Printf("  [FAIL] BlockShape=%dx%d D1D2=%dx%d - Extract error: %v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, err)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Extract error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
 		return false
 	}
 
@@ -318,12 +345,12 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	duration := time.Since(start)
 
 	if accuracy == 100.0 {
-		log.Printf("  [OK] BlockShape=%dx%d D1D2=%dx%d - Accuracy=%.1f%% Time=%v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, accuracy, duration)
+		log.Printf("    [OK] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
 		return true
 	} else {
-		log.Printf("  [FAIL] BlockShape=%dx%d D1D2=%dx%d - Accuracy=%.1f%% Time=%v\n",
-			params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, accuracy, duration)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
 		return false
 	}
 }
