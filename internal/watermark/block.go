@@ -23,7 +23,11 @@ func (s BlockShape) blockArea() int {
 }
 
 func (s BlockShape) TotalBlocks(i ImageSource) int {
-	return (i.waveWidth / s[0]) * (i.waveHeight / s[1])
+	return s.totalBlocks(i.waveWidth, i.waveHeight)
+}
+
+func (s BlockShape) totalBlocks(width, height int) int {
+	return (width / s[0]) * (height / s[1])
 }
 
 func (s BlockShape) IsZero() bool {

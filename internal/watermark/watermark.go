@@ -19,6 +19,10 @@ func Enable(src ImageSource, markLen int, shape BlockShape) error {
 	return nil
 }
 
+func TotalBlocks(rect image.Rectangle, shape BlockShape) int {
+	return shape.totalBlocks((rect.Dx()+1)/2, (rect.Dy()+1)/2)
+}
+
 func Wavelets(src ImageSource) []*dwt.Wavelets {
 	var wavelets = make([]*dwt.Wavelets, 3)
 	var wg sync.WaitGroup
