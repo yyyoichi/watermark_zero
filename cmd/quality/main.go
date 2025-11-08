@@ -150,6 +150,14 @@ type TestParams struct {
 	TotalBlocks int
 }
 
+// Stats holds the statistics for a set of tests.
+type Stats struct {
+	Total         int
+	Success       int
+	Failures      int
+	TotalAccuracy float64
+}
+
 func main() {
 	// Parse command-line arguments
 	numImages := flag.Int("n", 10, "number of images to test")
@@ -157,18 +165,23 @@ func main() {
 
 	ctx := context.Background()
 
-	// Test parameters: 5 image sizes × 5 block shapes × 4 d1/d2 settings
+	// Test parameters: Focus on EmbedCount 5~15 range for detailed threshold analysis
+	// Based on result_01.txt: threshold area is around 854x480 and below
 	imageSizes := [][]int{
-		{1920, 1080}, // FHD
-		{1280, 720},  // HD
-		{854, 480},   // 480p
-		{640, 360},   // 360p
-		{426, 240},   // 240p
+		{854, 480}, // 480p - EmbedCount ~9.58-17.11
+		{800, 450}, // ~450p
+		{768, 432}, // ~432p
+		{720, 405}, // ~405p
+		{640, 360}, // 360p - EmbedCount ~5.42-9.58
+		{600, 338}, // ~338p
+		{512, 288}, // ~288p
+		{480, 270}, // ~270p
+		{426, 240}, // 240p - EmbedCount ~2.39-4.28
+		{320, 180}, // 180p - EmbedCount ~1.19-2.85
+		{256, 144}, // 144p - EmbedCount ~0.75-1.71
 	}
 
 	blockShapes := [][]int{
-		{4, 4},
-		{4, 6},
 		{6, 6},
 		{6, 8},
 		{8, 8},
@@ -179,6 +192,7 @@ func main() {
 		{30, 17},
 		{25, 14},
 		{20, 11},
+		{15, 8},
 	}
 
 	// Parse image URLs
@@ -207,11 +221,11 @@ func main() {
 	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
 		len(imageSizes), len(blockShapes), len(d1d2Pairs), len(imageSizes)*len(blockShapes)*len(d1d2Pairs))
 
-	successCount := 0
-	totalTests := 0
+	grandTotalStats := make(map[string]*Stats)
 
 	for i, url := range urls {
 		log.Printf("\n[%d/%d] Testing image: %s\n", i+1, len(urls), url)
+		imageStats := make(map[string]*Stats) // For subtotals
 
 		for _, size := range imageSizes {
 			width, height := size[0], size[1]
@@ -240,20 +254,70 @@ func main() {
 					}
 					params.EmbedCount = float64(params.TotalBlocks) / float64(len(testMark))
 
-					totalTests++
-					success := testWatermark(ctx, batch, testMark, params)
-					if success {
-						successCount++
+					// Initialize stats if not present
+					d1d2Key := fmt.Sprintf("%dx%d", params.D1, params.D2)
+					if _, ok := imageStats[d1d2Key]; !ok {
+						imageStats[d1d2Key] = &Stats{}
+					}
+					if _, ok := grandTotalStats[d1d2Key]; !ok {
+						grandTotalStats[d1d2Key] = &Stats{}
+					}
+
+					accuracy := testWatermark(ctx, batch, testMark, params)
+
+					// Update stats
+					imageStats[d1d2Key].Total++
+					grandTotalStats[d1d2Key].Total++
+					imageStats[d1d2Key].TotalAccuracy += accuracy
+					grandTotalStats[d1d2Key].TotalAccuracy += accuracy
+
+					if accuracy == 100.0 {
+						imageStats[d1d2Key].Success++
+						grandTotalStats[d1d2Key].Success++
+					} else {
+						imageStats[d1d2Key].Failures++
+						grandTotalStats[d1d2Key].Failures++
 					}
 				}
 			}
 		}
+		printStats(fmt.Sprintf("Subtotal for image %d (%s)", i+1, url), imageStats)
 	}
 
-	log.Printf("\n=== Results ===\n")
-	log.Printf("Total tests: %d\n", totalTests)
-	log.Printf("Successful: %d (%.2f%%)\n", successCount, float64(successCount)/float64(totalTests)*100)
-	log.Printf("Failed: %d (%.2f%%)\n", totalTests-successCount, float64(totalTests-successCount)/float64(totalTests)*100)
+	printStats("Grand Total", grandTotalStats)
+}
+
+func printStats(title string, stats map[string]*Stats) {
+	log.Printf("\n--- %s ---\n", title)
+	total := 0
+	success := 0
+	totalAccuracy := 0.0
+	log.Println("D1/D2 Pair | Avg. Accuracy | Success Rate | Success / Total")
+	log.Println("-----------|---------------|--------------|-----------------")
+	for d1d2, stat := range stats {
+		total += stat.Total
+		success += stat.Success
+		totalAccuracy += stat.TotalAccuracy
+		if stat.Total > 0 {
+			log.Printf("%-10s | %12.2f%% | %11.2f%% | %d / %d\n",
+				d1d2,
+				stat.TotalAccuracy/float64(stat.Total),
+				float64(stat.Success)/float64(stat.Total)*100,
+				stat.Success,
+				stat.Total,
+			)
+		}
+	}
+	log.Println("-----------|---------------|--------------|-----------------")
+	if total > 0 {
+		log.Printf("Overall    | %12.2f%% | %11.2f%% | %d / %d\n",
+			totalAccuracy/float64(total),
+			float64(success)/float64(total)*100,
+			success,
+			total,
+		)
+	}
+	log.Println("----------------------------------------------------------")
 }
 
 func parseURLs(data string) []string {
@@ -295,7 +359,7 @@ func fetchImageWithSize(url string, width, height int) (image.Image, error) {
 	return img, nil
 }
 
-func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, params TestParams) bool {
+func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, params TestParams) float64 {
 	opts := []watermark.Option{
 		watermark.WithBlockShape(params.BlockShapeW, params.BlockShapeH),
 		watermark.WithD1D2(params.D1, params.D2),
@@ -308,7 +372,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Embed error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return false
+		return 0.0
 	}
 
 	// JPEG compression and decode with quality 100
@@ -316,13 +380,13 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	if err := jpeg.Encode(&buf, markedImg, &jpeg.Options{Quality: 100}); err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG encode error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return false
+		return 0.0
 	}
 	compressedImg, err := jpeg.Decode(&buf)
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG decode error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return false
+		return 0.0
 	}
 
 	// Extract
@@ -330,7 +394,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Extract error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return false
+		return 0.0
 	}
 
 	// Verify
@@ -347,10 +411,9 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 	if accuracy == 100.0 {
 		log.Printf("    [OK] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
-		return true
 	} else {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
-		return false
 	}
+	return accuracy
 }
