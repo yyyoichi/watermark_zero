@@ -23,7 +23,6 @@ import (
 
 	"github.com/yyyoichi/httpcache-go"
 	watermark "github.com/yyyoichi/watermark_zero"
-	innerwatermark "github.com/yyyoichi/watermark_zero/internal/watermark"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 	"golang.org/x/image/draw"
 )
@@ -248,7 +247,7 @@ func main() {
 						D1:          d1d2[0],
 						D2:          d1d2[1],
 
-						TotalBlocks: innerwatermark.TotalBlocks(rect, innerwatermark.NewBlockShape(bs[1], bs[0])),
+						TotalBlocks: (rect.Dx() + 1) / bs[1] * (rect.Dy() + 1) / bs[0],
 						ImageWidth:  width,
 						ImageHeight: height,
 					}
