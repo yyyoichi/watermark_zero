@@ -31,8 +31,14 @@ func main() {
 	flag.Parse()
 
 	// Parameters (can be expanded)
-	imageSizes := [][]int{{426, 240}}
-	blockShapes := [][]int{{6, 6}}
+	imageSizes := [][]int{
+		{426, 240},
+	}
+	blockShapes := [][]int{
+		{6, 6},
+		{6, 8},
+		{8, 8},
+	}
 	d1d2Pairs := [][]int{{25, 14}}
 
 	urls := images.ParseURLs()
