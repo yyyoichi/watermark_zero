@@ -1,8 +1,8 @@
-module quality
+module exp
 
 go 1.24.10
 
-replace github.com/yyyoichi/watermark_zero => ../../
+replace github.com/yyyoichi/watermark_zero => ../
 
 require (
 	github.com/yyyoichi/bitstream-go v0.1.2
