@@ -4,6 +4,10 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/yyyoichi/bitstream-go v0.1.2 h1:fk56o0b7uWHTUzOAx7ZGvKR15Nc1TCdfWkeFX0JaFNw=
+github.com/yyyoichi/bitstream-go v0.1.2/go.mod h1:+zUAKGaVVfsRij0wcg1OXOY83/nwlQ2dGSoJwVSDCuU=
+github.com/yyyoichi/golay v0.1.2 h1:tHQq+0cvtifcglmJFmFKGPZ/j5Uy9hjZ92zWsjaJyOg=
+github.com/yyyoichi/golay v0.1.2/go.mod h1:JMI7fZSrcxLFQVP/sWXss7reSzhOSi2uzWRXjFD07xw=
 github.com/yyyoichi/httpcache-go v0.1.5 h1:upGO3VSR6lPjm07czawAeHBVddE/5mccu1btMWpq1Jg=
 github.com/yyyoichi/httpcache-go v0.1.5/go.mod h1:unlJDwv+dY637u9EtMjcOd8AQ1gho+a208+O8a4dDtI=
 golang.org/x/image v0.32.0 h1:6lZQWq75h7L5IWNk0r+SCpUJ6tUVd3v4ZHnbRKLkUDQ=

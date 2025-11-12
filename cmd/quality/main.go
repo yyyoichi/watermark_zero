@@ -21,6 +21,8 @@ import (
 
 	_ "embed"
 
+	"github.com/yyyoichi/bitstream-go"
+	"github.com/yyyoichi/golay"
 	"github.com/yyyoichi/httpcache-go"
 	watermark "github.com/yyyoichi/watermark_zero"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
@@ -142,6 +144,7 @@ type TestParams struct {
 	D1          int
 	D2          int
 
+	Mark Mark
 	// meta
 	ImageWidth  int
 	EmbedCount  float64
@@ -149,12 +152,75 @@ type TestParams struct {
 	TotalBlocks int
 }
 
+type Mark struct {
+	Name     string
+	Original []bool
+	Encoded  []bool
+
+	Decode func([]bool) []bool
+}
+
+func newGolayMark(original []bool) Mark {
+	l := len(original)
+
+	var m Mark
+	m.Name = "Golay"
+	m.Original = original
+	{
+		w := bitstream.NewBitWriter[uint64](0, 0)
+		for _, v := range original {
+			w.Bool(v)
+		}
+		data, _ := w.Data()
+		var encoded []uint64
+		enc := golay.NewEncoder(data, l)
+		_ = enc.Encode(&encoded)
+		r := bitstream.NewBitReader(encoded, 0, 0)
+		r.SetBits(enc.Bits())
+		m.Encoded = make([]bool, enc.Bits())
+		for i := range m.Encoded {
+			m.Encoded[i] = r.U8R(1, i) == 1
+		}
+	}
+	m.Decode = func(b []bool) []bool {
+		w := bitstream.NewBitWriter[uint64](0, 0)
+		for _, v := range b {
+			w.Bool(v)
+		}
+		data, _ := w.Data()
+		var decoded []uint64
+		dec := golay.NewDecoder(data, len(b))
+		_ = dec.Decode(&decoded)
+		r := bitstream.NewBitReader(decoded, 0, 0)
+		r.SetBits(dec.Bits())
+		result := make([]bool, dec.Bits())
+		for i := range result {
+			result[i] = r.U8R(1, i) == 1
+		}
+		return result
+	}
+	return m
+}
+
 // Stats holds the statistics for a set of tests.
 type Stats struct {
-	Total         int
-	Success       int
-	Failures      int
-	TotalAccuracy float64
+	Total                int
+	Success              int
+	Failures             int
+	TotalEncodedAccuracy float64 // Accuracy when comparing extracted bits with Encoded
+	TotalDecodedAccuracy float64 // Accuracy when comparing decoded bits with Original
+}
+
+func boolSliceToString(b []bool) string {
+	s := ""
+	for _, v := range b {
+		if v {
+			s += "1"
+		} else {
+			s += "0"
+		}
+	}
+	return s
 }
 
 func main() {
@@ -215,6 +281,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to encode test mark: %v", err)
 	}
+	golayMark := newGolayMark(testMark)
 
 	log.Printf("Starting quality evaluation with %d images\n", len(urls))
 	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
@@ -246,12 +313,13 @@ func main() {
 						BlockShapeW: bs[1],
 						D1:          d1d2[0],
 						D2:          d1d2[1],
+						Mark:        golayMark,
 
 						TotalBlocks: (rect.Dx() + 1) / bs[1] * (rect.Dy() + 1) / bs[0],
 						ImageWidth:  width,
 						ImageHeight: height,
 					}
-					params.EmbedCount = float64(params.TotalBlocks) / float64(len(testMark))
+					params.EmbedCount = float64(params.TotalBlocks) / float64(len(golayMark.Encoded))
 
 					// Initialize stats if not present
 					d1d2Key := fmt.Sprintf("%dx%d", params.D1, params.D2)
@@ -262,15 +330,17 @@ func main() {
 						grandTotalStats[d1d2Key] = &Stats{}
 					}
 
-					accuracy := testWatermark(ctx, batch, testMark, params)
+					result := testWatermark(ctx, batch, params)
 
 					// Update stats
 					imageStats[d1d2Key].Total++
 					grandTotalStats[d1d2Key].Total++
-					imageStats[d1d2Key].TotalAccuracy += accuracy
-					grandTotalStats[d1d2Key].TotalAccuracy += accuracy
+					imageStats[d1d2Key].TotalEncodedAccuracy += result.EncodedAccuracy
+					grandTotalStats[d1d2Key].TotalEncodedAccuracy += result.EncodedAccuracy
+					imageStats[d1d2Key].TotalDecodedAccuracy += result.DecodedAccuracy
+					grandTotalStats[d1d2Key].TotalDecodedAccuracy += result.DecodedAccuracy
 
-					if accuracy == 100.0 {
+					if result.EncodedAccuracy == 100.0 || result.DecodedAccuracy == 100.0 {
 						imageStats[d1d2Key].Success++
 						grandTotalStats[d1d2Key].Success++
 					} else {
@@ -290,33 +360,37 @@ func printStats(title string, stats map[string]*Stats) {
 	log.Printf("\n--- %s ---\n", title)
 	total := 0
 	success := 0
-	totalAccuracy := 0.0
-	log.Println("D1/D2 Pair | Avg. Accuracy | Success Rate | Success / Total")
-	log.Println("-----------|---------------|--------------|-----------------")
+	totalEncodedAccuracy := 0.0
+	totalDecodedAccuracy := 0.0
+	log.Println("D1/D2 Pair | Avg. Encoded Acc | Avg. Decoded Acc | Success Rate | Success / Total")
+	log.Println("-----------|------------------|------------------|--------------|----------------")
 	for d1d2, stat := range stats {
 		total += stat.Total
 		success += stat.Success
-		totalAccuracy += stat.TotalAccuracy
+		totalEncodedAccuracy += stat.TotalEncodedAccuracy
+		totalDecodedAccuracy += stat.TotalDecodedAccuracy
 		if stat.Total > 0 {
-			log.Printf("%-10s | %12.2f%% | %11.2f%% | %d / %d\n",
+			log.Printf("%-10s | %15.2f%% | %15.2f%% | %11.2f%% | %d / %d\n",
 				d1d2,
-				stat.TotalAccuracy/float64(stat.Total),
+				stat.TotalEncodedAccuracy/float64(stat.Total),
+				stat.TotalDecodedAccuracy/float64(stat.Total),
 				float64(stat.Success)/float64(stat.Total)*100,
 				stat.Success,
 				stat.Total,
 			)
 		}
 	}
-	log.Println("-----------|---------------|--------------|-----------------")
+	log.Println("-----------|------------------|------------------|--------------|----------------")
 	if total > 0 {
-		log.Printf("Overall    | %12.2f%% | %11.2f%% | %d / %d\n",
-			totalAccuracy/float64(total),
+		log.Printf("Overall    | %15.2f%% | %15.2f%% | %11.2f%% | %d / %d\n",
+			totalEncodedAccuracy/float64(total),
+			totalDecodedAccuracy/float64(total),
 			float64(success)/float64(total)*100,
 			success,
 			total,
 		)
 	}
-	log.Println("----------------------------------------------------------")
+	log.Println("--------------------------------------------------------------------------")
 }
 
 func parseURLs(data string) []string {
@@ -358,7 +432,13 @@ func fetchImageWithSize(url string, width, height int) (image.Image, error) {
 	return img, nil
 }
 
-func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, params TestParams) float64 {
+// TestResult holds the accuracy results for both encoded and decoded comparisons
+type TestResult struct {
+	EncodedAccuracy float64
+	DecodedAccuracy float64
+}
+
+func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParams) TestResult {
 	opts := []watermark.Option{
 		watermark.WithBlockShape(params.BlockShapeW, params.BlockShapeH),
 		watermark.WithD1D2(params.D1, params.D2),
@@ -366,53 +446,63 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, mark []bool, par
 
 	start := time.Now()
 
-	// Embed
-	markedImg, err := batch.Embed(ctx, mark, opts...)
+	// Embed using Mark.Encoded
+	markedImg, err := batch.Embed(ctx, params.Mark.Encoded, opts...)
 	if err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Embed error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return 0.0
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - Embed error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
+		return TestResult{0.0, 0.0}
 	}
 
 	// JPEG compression and decode with quality 100
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, markedImg, &jpeg.Options{Quality: 100}); err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG encode error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return 0.0
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - JPEG encode error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
+		return TestResult{0.0, 0.0}
 	}
 	compressedImg, err := jpeg.Decode(&buf)
 	if err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - JPEG decode error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return 0.0
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - JPEG decode error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
+		return TestResult{0.0, 0.0}
 	}
 
 	// Extract
-	extracted, err := watermark.Extract(ctx, compressedImg, len(mark), opts...)
+	extracted, err := watermark.Extract(ctx, compressedImg, len(params.Mark.Encoded), opts...)
 	if err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Extract error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, err)
-		return 0.0
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - Extract error: %v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
+		return TestResult{0.0, 0.0}
 	}
 
-	// Verify
-	matches := 0
-	for i := range mark {
-		if i < len(extracted) && mark[i] == extracted[i] {
-			matches++
+	// Verify 1: Compare extracted with Encoded
+	encodedMatches := 0
+	for i := range params.Mark.Encoded {
+		if i < len(extracted) && params.Mark.Encoded[i] == extracted[i] {
+			encodedMatches++
 		}
 	}
+	encodedAccuracy := float64(encodedMatches) / float64(len(params.Mark.Encoded)) * 100
 
-	accuracy := float64(matches) / float64(len(mark)) * 100
+	// Verify 2: Decode extracted and compare with Original
+	decoded := params.Mark.Decode(extracted)
+	decodedMatches := 0
+	for i := range params.Mark.Original {
+		if i < len(decoded) && params.Mark.Original[i] == decoded[i] {
+			decodedMatches++
+		}
+	}
+	decodedAccuracy := float64(decodedMatches) / float64(len(params.Mark.Original)) * 100
+
 	duration := time.Since(start)
 
-	if accuracy == 100.0 {
-		log.Printf("    [OK] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
+	if encodedAccuracy == 100.0 || decodedAccuracy == 100.0 {
+		log.Printf("    [OK] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - EncodedAcc=%.1f%% DecodedAcc=%.1f%% Time=%v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, encodedAccuracy, decodedAccuracy, duration)
 	} else {
-		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d EmbedCount=%.2f TotalBlocks=%d - Accuracy=%.1f%% Time=%v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.EmbedCount, params.TotalBlocks, accuracy, duration)
+		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - EncodedAcc=%.1f%% DecodedAcc=%.1f%% Time=%v\n",
+			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, encodedAccuracy, decodedAccuracy, duration)
 	}
-	return accuracy
+	return TestResult{encodedAccuracy, decodedAccuracy}
 }
