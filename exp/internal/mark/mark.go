@@ -46,7 +46,7 @@ func NewGolayMark(original []bool) Mark {
 		_ = dec.Decode(&decoded)
 		r := bitstream.NewBitReader(decoded, 0, 0)
 		r.SetBits(dec.Bits())
-		result := make([]bool, dec.Bits())
+		result := make([]bool, l)
 		for i := range result {
 			result[i] = r.U8R(1, i) == 1
 		}
