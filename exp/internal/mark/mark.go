@@ -1,6 +1,8 @@
 package mark
 
 import (
+	"exp/internal/shuffle"
+
 	"github.com/yyyoichi/bitstream-go"
 	"github.com/yyyoichi/golay"
 )
@@ -11,6 +13,33 @@ type Mark struct {
 	Encoded  []bool
 
 	Decode func([]bool) []bool
+}
+
+func NewNormalMark(original []bool) Mark {
+	m := Mark{
+		Name:     "Normal",
+		Original: original,
+		Encoded:  original,
+		Decode: func(b []bool) []bool {
+			return b
+		},
+	}
+	return m
+}
+
+func NewShuffledGolayMark(original []bool) Mark {
+	tmp := NewGolayMark(original)
+	m := Mark{
+		Name:     "SfGolay",
+		Original: tmp.Original,
+		Encoded:  tmp.Encoded,
+	}
+	shuffle.Shuffle(m.Encoded)
+	m.Decode = func(b []bool) []bool {
+		shuffle.Ishuffle(b)
+		return tmp.Decode(b)
+	}
+	return m
 }
 
 func NewGolayMark(original []bool) Mark {
