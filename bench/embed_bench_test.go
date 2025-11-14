@@ -86,11 +86,11 @@ func createImage(width, height int) *image.RGBA {
 }
 
 // createTestMark creates a test watermark bit sequence
-func createTestMark() []bool {
-	return []bool{
+func createTestMark() watermark.EmbedMark {
+	return watermark.NewBoolEmbedMark([]bool{
 		true, false, true, true, false, false, true, false,
 		false, true, false, true, true, false, true, true,
 		true, true, false, false, true, false, false, true,
 		false, false, true, true, false, true, true, false,
-	}
+	})
 }

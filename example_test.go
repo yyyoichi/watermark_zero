@@ -19,13 +19,13 @@ func Example_watermark() {
 	)
 
 	// Define a bit sequence to embed
-	mark := strmark.Encode("Test-Mark")
+	mark := watermark.NewBoolEmbedMark(strmark.Encode("Test-Mark"))
 
 	// Embed the watermark
 	markedImg, _ := w.Embed(ctx, img, mark)
 
 	// Extract the watermark
-	extractedMark, _ := w.Extract(ctx, markedImg, len(mark))
+	extractedMark, _ := w.Extract(ctx, markedImg, mark.Len())
 	fmt.Println(strmark.Decode(extractedMark))
 
 	// Output:
@@ -43,10 +43,10 @@ func Example_batch() {
 
 	batch := watermark.NewBatch(img)
 	for _, m := range []string{"Hello!", "こんにちは！"} {
-		mark := strmark.Encode(m)
+		mark := watermark.NewBoolEmbedMark(strmark.Encode(m))
 		markedImg, _ := batch.Embed(ctx, mark, opts...)
 
-		extractedMark, _ := watermark.Extract(ctx, markedImg, len(mark), opts...)
+		extractedMark, _ := watermark.Extract(ctx, markedImg, mark.Len(), opts...)
 
 		fmt.Println(strmark.Decode(extractedMark))
 	}

@@ -2,13 +2,13 @@ package watermark
 
 import "github.com/yyyoichi/watermark_zero/internal/kmeans"
 
-type embedMark []bool
+type EmbedMark interface {
+	GetBit(int) float64
+	BitMark
+}
 
-func (m embedMark) getBit(at int) float64 {
-	if m[at%len(m)] {
-		return 1
-	}
-	return 0
+type BitMark interface {
+	Len() int
 }
 
 type extractMark []kmeans.AverageStore

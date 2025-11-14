@@ -17,7 +17,7 @@ var (
 
 // Embed embeds a bit sequence into an image with the specified options.
 // This is a convenience function that creates a Watermark instance and calls its Embed method.
-func Embed(ctx context.Context, src image.Image, mark []bool, opts ...Option) (image.Image, error) {
+func Embed(ctx context.Context, src image.Image, mark EmbedMark, opts ...Option) (image.Image, error) {
 	w, _ := New(opts...)
 	return w.Embed(ctx, src, mark)
 }
@@ -56,9 +56,9 @@ func New(opts ...Option) (*Watermark, error) {
 //  6. Reconstructs the image.
 //
 // Returns an error if the image is too small for the bit sequence to be embedded.
-func (w *Watermark) Embed(ctx context.Context, src image.Image, mark []bool) (image.Image, error) {
+func (w *Watermark) Embed(ctx context.Context, src image.Image, mark EmbedMark) (image.Image, error) {
 	img := watermark.NewImageCore(src)
-	if err := watermark.Enable(img, len(mark), w.blockShape); err != nil {
+	if err := watermark.Enable(img, mark.Len(), w.blockShape); err != nil {
 		return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
 	}
 	return watermark.Embed(ctx, img, mark, w.blockShape, w.d1, w.d2, nil, nil)
@@ -118,10 +118,10 @@ func NewBatch(src image.Image) *Batch {
 }
 
 // Embed embeds a bit sequence into the cached image with specified options.
-func (b *Batch) Embed(ctx context.Context, mark []bool, opts ...Option) (image.Image, error) {
+func (b *Batch) Embed(ctx context.Context, mark EmbedMark, opts ...Option) (image.Image, error) {
 	w, _ := New(opts...)
 	img := b.original.Copy()
-	if err := watermark.Enable(img, len(mark), w.blockShape); err != nil {
+	if err := watermark.Enable(img, mark.Len(), w.blockShape); err != nil {
 		return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
 	}
 	// Uses pre-computed wavelets and DCT cache for improved performance.
