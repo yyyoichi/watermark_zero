@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"exp/internal/images"
 	"exp/internal/mark"
 	"fmt"
+	"image"
 	"image/jpeg"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,9 +17,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yyyoichi/bitstream-go"
 	watermark "github.com/yyyoichi/watermark_zero"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 )
+
+var TEST_MARK = func() []bool {
+	w := bitstream.NewBitWriter[uint64](0, 0)
+	for i := range wzeromark.MarkLen / 8 {
+		w.U8(0, 8, uint8(i*2))
+	}
+	d, _ := w.Data()
+	r := bitstream.NewBitReader(d, 0, 0)
+	var data = make([]bool, wzeromark.MarkLen)
+	for i := range data {
+		data[i] = r.U8R(1, i) == 1
+	}
+	return data
+}()
 
 func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 	ctx := context.Background()
@@ -83,18 +99,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 		urls = urls[:numImages]
 	}
 
-	// Prepare mark (ShuffledGolay only)
-	seed := make([]byte, 32)
-	_, _ = rand.Read(seed)
-	m, err := wzeromark.New(seed, seed, "1a2b")
-	if err != nil {
-		log.Fatalf("Failed to create watermark: %v", err)
-	}
-	testMark, err := m.Encode("TEST_MARK")
-	if err != nil {
-		log.Fatalf("Failed to encode test mark: %v", err)
-	}
-	shuffledGolay := mark.NewShuffledGolayMark(testMark)
+	shuffledGolay := mark.NewShuffledGolayMark(TEST_MARK)
 
 	log.Printf("Starting D1/D2 optimization with %d images (offset=%d)\n", len(urls), offset)
 	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
@@ -140,6 +145,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 						ImageWidth:  width,
 						ImageHeight: height,
 						EmbedCount:  embedCount,
+						ImageName:   fmt.Sprintf("%03d", i+offset),
 					})
 				}
 			}
@@ -184,6 +190,9 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 				params := result.TestParams
 
 				allResults = append(allResults, OptimizeResult{
+					OriginalImagePath: images.GetCachedImagePath(url, width, height),
+					EmbedImagePath:    params.EmbeddedImagePath(),
+
 					ImageSize:       sizeKey,
 					ImageWidth:      params.ImageWidth,
 					ImageHeight:     params.ImageHeight,
@@ -249,6 +258,7 @@ type TestParams struct {
 	ImageWidth  int
 	ImageHeight int
 	EmbedCount  float64
+	ImageName   string
 }
 
 // TestResult holds the test outcome
@@ -267,26 +277,32 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 
 	start := time.Now()
 
-	// Embed
-	markedImg, err := batch.Embed(ctx, params.Mark.Encoded, opts...)
+	embeddedPath := params.EmbeddedImagePath()
+	embededJpeg, err := getEmbedImage(embeddedPath)
 	if err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Embed error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
-			params.D1, params.D2, params.EmbedCount, err)
-		return TestResult{&params, 0.0, 0.0, false}
+		// Embed
+		embeddedImg, err := batch.Embed(ctx, params.Mark.Encoded, opts...)
+		if err != nil {
+			log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Embed error: %v\n",
+				params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
+				params.D1, params.D2, params.EmbedCount, err)
+			return TestResult{&params, 0.0, 0.0, false}
+		}
+
+		// Save embedded image for caching
+		embededJpeg, err = saveEmbedImage(embeddedPath, embeddedImg)
+		if err != nil {
+			log.Printf("    [WARN] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Save embed cache error: %v\n",
+				params.ImageWidth,
+				params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
+				params.D1, params.D2, params.EmbedCount, err)
+			return TestResult{&params, 0.0, 0.0, false}
+		}
 	}
 
-	// JPEG compression
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, markedImg, &jpeg.Options{Quality: 100}); err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - JPEG error: %v\n",
-			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
-			params.D1, params.D2, params.EmbedCount, err)
-		return TestResult{&params, 0.0, 0.0, false}
-	}
-	compressedImg, err := jpeg.Decode(&buf)
+	compressedImg, err := jpeg.Decode(embededJpeg)
 	if err != nil {
-		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - JPEG decode error: %v\n",
+		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Decode cached error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 			params.D1, params.D2, params.EmbedCount, err)
 		return TestResult{&params, 0.0, 0.0, false}
@@ -333,4 +349,56 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 		encodedAccuracy, decodedAccuracy, duration)
 
 	return TestResult{&params, encodedAccuracy, decodedAccuracy, success}
+}
+
+var embeddedDir = "/tmp/optimize-embedded-images"
+
+func (params TestParams) EmbeddedImagePath() string {
+	embeddedFilename := fmt.Sprintf("img%s_%dx%d_bs%dx%d_ds%dx%d.jpeg",
+		params.ImageName,
+		params.ImageWidth, params.ImageHeight,
+		params.BlockShapeW, params.BlockShapeH,
+		params.D1, params.D2)
+	return filepath.Join(embeddedDir, embeddedFilename)
+}
+
+func saveEmbedImage(path string, img image.Image) (io.Reader, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 100}); err != nil {
+		return nil, fmt.Errorf("failed jpeg encode: %w", err)
+	}
+	data := buf.Bytes()
+
+	// Save embedded image
+	f, err := os.Create(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed create file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err = f.Write(data); err != nil {
+		return nil, fmt.Errorf("failed write file: %w", err)
+	}
+	return bytes.NewReader(data), nil
+}
+
+func getEmbedImage(path string) (io.Reader, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed open file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed read file: %w", err)
+	}
+	return bytes.NewReader(data), nil
+}
+
+func init() {
+	// Generate filename for embedded image from TestParams
+	if err := os.MkdirAll(embeddedDir, 0755); err != nil {
+		log.Fatalf("Failed to create embedded image directory: %v", err)
+	}
 }

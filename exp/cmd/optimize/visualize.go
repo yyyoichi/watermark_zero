@@ -27,6 +27,9 @@ type DataJsonFormat struct {
 
 // OptimizeResult holds test results for visualization
 type OptimizeResult struct {
+	OriginalImagePath string
+	EmbedImagePath    string
+
 	ImageSize   string
 	ImageWidth  int
 	ImageHeight int

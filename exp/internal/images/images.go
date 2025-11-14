@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,16 +141,9 @@ var client = httpcache.Client{
 }
 
 // FetchImageWithSize fetches the image at the given URL and resizes/crops it to width x height.
-func FetchImageWithSize(url string, width, height int) (image.Image, error) {
-	// Add resolution parameters
-	sizeParams := fmt.Sprintf("w=%d&h=%d", width, height)
-	if strings.Contains(url, "?") {
-		url += "&" + sizeParams
-	} else {
-		url += "?" + sizeParams
-	}
-
-	resp, err := client.Get(url)
+func FetchImageWithSize(uri string, width, height int) (image.Image, error) {
+	uri = getUri(uri, width, height)
+	resp, err := client.Get(uri)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch: %w", err)
 	}
@@ -165,4 +159,21 @@ func FetchImageWithSize(url string, width, height int) (image.Image, error) {
 	}
 
 	return img, nil
+}
+
+func GetCachedImagePath(uri string, width, height int) string {
+	u, _ := url.ParseRequestURI(getUri(uri, width, height))
+	o := httpcache.NewHttpResponseObject(u)
+	return "/tmp/pexels_http_cache/" + o.Key()
+}
+
+func getUri(uri string, width, height int) string {
+	// Add resolution parameters
+	sizeParams := fmt.Sprintf("w=%d&h=%d", width, height)
+	if strings.Contains(uri, "?") {
+		uri += "&" + sizeParams
+	} else {
+		uri += "?" + sizeParams
+	}
+	return uri
 }
