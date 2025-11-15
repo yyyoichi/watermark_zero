@@ -166,3 +166,10 @@ func main() {
 		}
 	}
 }
+
+func init() {
+	// mkdir tmp directories
+	os.MkdirAll(TmpOptimizeDir, 0755)
+	os.MkdirAll(TmpOptimizeJsonsDir, 0755)
+	os.MkdirAll(TmpOptimizeEmbeddedImagesDir, 0755)
+}
