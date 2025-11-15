@@ -17,6 +17,41 @@ var (
 	TmpOptimizeEmbeddedImagesDir = "/tmp/optimize-embedded-images"
 )
 
+type (
+	DataJsonFormat struct {
+		Params struct {
+			ImageSizes      [][]int
+			D1D2Pairs       [][]int
+			BlockShapes     [][]int
+			NumImages       int
+			Offset          int
+			TargetEmbedLow  float64
+			TargetEmbedHigh float64
+		}
+		Results []OptimizeResult `json:"results"`
+	}
+
+	// OptimizeResult holds test results for visualization
+	OptimizeResult struct {
+		OriginalImagePath string
+		EmbedImagePath    string
+
+		ImageSize   string
+		ImageWidth  int
+		ImageHeight int
+		BlockShapeW int
+		BlockShapeH int
+		D1          int
+		D2          int
+		EmbedCount  float64
+		TotalBlocks int
+
+		EncodedAccuracy float64
+		DecodedAccuracy float64
+		Success         bool
+	}
+)
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
