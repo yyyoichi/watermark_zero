@@ -12,7 +12,7 @@ import (
 func startHTTPServer(serverDir string) {
 	// Use default directory if not specified
 	if serverDir == "" {
-		serverDir = "/tmp/optimize"
+		serverDir = TmpOptimizeDir
 	}
 
 	// Check if directory exists

@@ -191,7 +191,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 				allResults = append(allResults, OptimizeResult{
 					OriginalImagePath: images.GetCachedImagePath(url, width, height),
-					EmbedImagePath:    params.EmbeddedImagePath(),
+					EmbedImagePath:    params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
 
 					ImageSize:       sizeKey,
 					ImageWidth:      params.ImageWidth,
@@ -215,7 +215,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 	log.Printf("Generating visualizations...\n")
 
 	// Generate visualizations
-	outDir := "/tmp/optimize-jsons"
+	outDir := TmpOptimizeJsonsDir
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Fatalf("Failed to create output directory: %v", err)
 	}
@@ -277,7 +277,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 
 	start := time.Now()
 
-	embeddedPath := params.EmbeddedImagePath()
+	embeddedPath := params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir)
 	embededJpeg, err := getEmbedImage(embeddedPath)
 	if err != nil {
 		// Embed
@@ -351,9 +351,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	return TestResult{&params, encodedAccuracy, decodedAccuracy, success}
 }
 
-var embeddedDir = "/tmp/optimize-embedded-images"
-
-func (params TestParams) EmbeddedImagePath() string {
+func (params TestParams) EmbeddedImagePath(embeddedDir string) string {
 	embeddedFilename := fmt.Sprintf("img%s_%dx%d_bs%dx%d_ds%dx%d.jpeg",
 		params.ImageName,
 		params.ImageWidth, params.ImageHeight,
@@ -394,11 +392,4 @@ func getEmbedImage(path string) (io.Reader, error) {
 		return nil, fmt.Errorf("failed read file: %w", err)
 	}
 	return bytes.NewReader(data), nil
-}
-
-func init() {
-	// Generate filename for embedded image from TestParams
-	if err := os.MkdirAll(embeddedDir, 0755); err != nil {
-		log.Fatalf("Failed to create embedded image directory: %v", err)
-	}
 }

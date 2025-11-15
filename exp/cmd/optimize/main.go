@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+var (
+	// TmpOptimizeDir is the base directory for optimization outputs
+	TmpOptimizeDir = "/tmp/optimize"
+	// TmpOptimizeJsonsDir is the directory for JSON output files
+	TmpOptimizeJsonsDir = "/tmp/optimize-jsons"
+	// TmpOptimizeEmbeddedImagesDir is the directory for embedded image cache
+	TmpOptimizeEmbeddedImagesDir = "/tmp/optimize-embedded-images"
+)
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -88,11 +97,11 @@ func main() {
 			}
 
 			// Get output directory
-			fmt.Print("Output directory for visualizations (default: /tmp/optimize): ")
+			fmt.Printf("Output directory for visualizations (default: %s): ", TmpOptimizeDir)
 			outputDir, _ := reader.ReadString('\n')
 			outputDir = strings.TrimSpace(outputDir)
 			if outputDir == "" {
-				outputDir = "/tmp/optimize"
+				outputDir = TmpOptimizeDir
 			}
 
 			fmt.Printf("\nVisualizing: inputFile=%s, outputDir=%s\n\n", inputFile, outputDir)
@@ -102,11 +111,11 @@ func main() {
 			fmt.Println("\n--- Starting HTTP Server ---")
 
 			// Get server directory
-			fmt.Print("Directory to serve (default: /tmp/optimize): ")
+			fmt.Printf("Directory to serve (default: %s): ", TmpOptimizeDir)
 			serverDir, _ := reader.ReadString('\n')
 			serverDir = strings.TrimSpace(serverDir)
 			if serverDir == "" {
-				serverDir = "/tmp/optimize"
+				serverDir = TmpOptimizeDir
 			}
 
 			fmt.Println("Server will start at http://localhost:8080")
