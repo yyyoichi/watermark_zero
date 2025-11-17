@@ -72,18 +72,26 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 	// D1/D2 parameter space for optimization
 	d1d2Pairs := [][]int{
-		{36, 20},
-		{30, 16},
-		{25, 15},
-		{24, 14},
-		{23, 13},
-		{22, 12},
 		{21, 11},
-		{20, 10},
+		{21, 9},
+		{21, 7},
+		{21, 5},
+		{21, 3},
+		{19, 11},
 		{19, 9},
-		{18, 8},
+		{19, 7},
+		{19, 5},
+		{19, 3},
+		{17, 11},
+		{17, 9},
 		{17, 7},
+		{17, 5},
+		{17, 3},
+		{15, 11},
+		{15, 9},
+		{15, 7},
 		{15, 5},
+		{15, 3},
 	} // Parsse image URLs
 	urls := images.ParseURLs()
 	if len(urls) == 0 {
