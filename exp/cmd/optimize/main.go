@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -122,18 +125,49 @@ func main() {
 		case "2":
 			fmt.Println("\n--- Visualizing Results ---")
 
-			// Get input file path
-			fmt.Print("JSON file path to visualize: ")
-			inputFile, _ := reader.ReadString('\n')
-			inputFile = strings.TrimSpace(inputFile)
-
-			if inputFile == "" {
-				fmt.Println("Error: Input file path is required")
-				os.Exit(1)
+			// Get JSON directory
+			fmt.Printf("JSON directory (default: %s): ", TmpOptimizeJsonsDir)
+			jsonDir, _ := reader.ReadString('\n')
+			jsonDir = strings.TrimSpace(jsonDir)
+			if jsonDir == "" {
+				jsonDir = TmpOptimizeJsonsDir
 			}
 
+			// List JSON files in the directory
+			jsonFiles, err := listJSONFiles(jsonDir)
+			if err != nil {
+				fmt.Printf("Error reading JSON directory: %v\n", err)
+				continue
+			}
+
+			if len(jsonFiles) == 0 {
+				fmt.Println("No JSON files found in the directory")
+				continue
+			}
+
+			// Display JSON files with indices (newest first)
+			fmt.Println("\nAvailable JSON files (newest first):")
+			for i, file := range jsonFiles {
+				fmt.Printf("  [%d] %s (modified: %s)\n", i+1, file.Name, file.ModTime.Format("2006-01-02 15:04:05"))
+			}
+
+			// Get file selection
+			fmt.Printf("\nSelect a JSON file (1-%d, default: 1): ", len(jsonFiles))
+			fileIndexStr, _ := reader.ReadString('\n')
+			fileIndexStr = strings.TrimSpace(fileIndexStr)
+			fileIndex := 1
+			if fileIndexStr != "" {
+				if val, err := strconv.Atoi(fileIndexStr); err == nil && val >= 1 && val <= len(jsonFiles) {
+					fileIndex = val
+				} else {
+					fmt.Printf("Invalid selection, using default (1)\n")
+				}
+			}
+
+			inputFile := jsonFiles[fileIndex-1].Path
+
 			// Get output directory
-			fmt.Printf("Output directory for visualizations (default: %s): ", TmpOptimizeDir)
+			fmt.Printf("\nOutput directory for visualizations (default: %s): ", TmpOptimizeDir)
 			outputDir, _ := reader.ReadString('\n')
 			outputDir = strings.TrimSpace(outputDir)
 			if outputDir == "" {
@@ -173,4 +207,47 @@ func init() {
 	os.MkdirAll(TmpOptimizeDir, 0755)
 	os.MkdirAll(TmpOptimizeJsonsDir, 0755)
 	os.MkdirAll(TmpOptimizeEmbeddedImagesDir, 0755)
+}
+
+// JSONFileInfo holds information about a JSON file
+type JSONFileInfo struct {
+	Name    string
+	Path    string
+	ModTime time.Time
+}
+
+// listJSONFiles lists all JSON files in a directory sorted by modification time (newest first)
+func listJSONFiles(dir string) ([]JSONFileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var jsonFiles []JSONFileInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		jsonFiles = append(jsonFiles, JSONFileInfo{
+			Name:    entry.Name(),
+			Path:    filepath.Join(dir, entry.Name()),
+			ModTime: info.ModTime(),
+		})
+	}
+
+	// Sort by modification time (newest first)
+	sort.Slice(jsonFiles, func(i, j int) bool {
+		return jsonFiles[i].ModTime.After(jsonFiles[j].ModTime)
+	})
+
+	return jsonFiles, nil
 }
