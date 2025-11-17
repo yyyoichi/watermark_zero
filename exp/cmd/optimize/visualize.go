@@ -300,11 +300,12 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		d1, d2 int
 	}
 	type d1d2Stats struct {
-		d1          int
-		d2          int
-		avgSSIM     float64
-		successRate float64
-		sampleCount int
+		d1                 int
+		d2                 int
+		avgSSIM            float64
+		successRate        float64
+		sampleCount        int
+		avgDecodedAccuracy float64
 	}
 
 	d1d2Groups := make(map[d1d2Key][]OptimizeResult)
@@ -319,6 +320,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		var totalSSIM float64
 		var successCount int
 		var validSSIMCount int
+		var totalDecodedAccuracy float64
 
 		for _, r := range groupResults {
 			if r.SSIM > 0 {
@@ -329,6 +331,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			if r.Success {
 				successCount++
 			}
+			totalDecodedAccuracy += r.DecodedAccuracy
 		}
 
 		if validSSIMCount == 0 {
@@ -340,11 +343,12 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		successRate := float64(successCount) / float64(len(groupResults)) * 100
 
 		stats = append(stats, d1d2Stats{
-			d1:          key.d1,
-			d2:          key.d2,
-			avgSSIM:     avgSSIM,
-			successRate: successRate,
-			sampleCount: len(groupResults),
+			d1:                 key.d1,
+			d2:                 key.d2,
+			avgSSIM:            avgSSIM,
+			successRate:        successRate,
+			sampleCount:        len(groupResults),
+			avgDecodedAccuracy: totalDecodedAccuracy / float64(len(groupResults)),
 		})
 	}
 
@@ -362,6 +366,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 	var xAxisData []string
 	var ssimData []opts.LineData
 	var successData []opts.LineData
+	var decodedAccuracyData []opts.LineData
 
 	for _, s := range stats {
 		xAxisData = append(xAxisData, fmt.Sprintf("D1=%dxD2=%d", s.d1, s.d2))
@@ -373,6 +378,10 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		successData = append(successData, opts.LineData{
 			Value: s.successRate,
 			Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d)", s.d1, s.d2, s.successRate, s.sampleCount),
+		})
+		decodedAccuracyData = append(decodedAccuracyData, opts.LineData{
+			Value: s.avgDecodedAccuracy,
+			Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d)", s.d1, s.d2, s.avgDecodedAccuracy, s.sampleCount),
 		})
 	}
 
@@ -428,7 +437,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 	line.ExtendYAxis(opts.YAxis{
 		Name: "Success Rate (%)",
 		Type: "value",
-		Min:  0,
+		Min:  40,
 		Max:  100,
 		AxisLabel: &opts.AxisLabel{
 			Formatter: "{value}%",
@@ -437,6 +446,16 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 
 	// Add Success Rate series (right Y-axis)
 	line.AddSeries("Success Rate (%)", successData,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1, // Bind to the second Y-axis (right)
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+	)
+	// Add Decoded Accuracy series (right Y-axis)
+	line.AddSeries("Avg Decoded Accuracy (%)", decodedAccuracyData,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth:     opts.Bool(true),
 			YAxisIndex: 1, // Bind to the second Y-axis (right)
