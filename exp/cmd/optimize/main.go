@@ -49,6 +49,7 @@ type (
 		EncodedAccuracy float64
 		DecodedAccuracy float64
 		Success         bool
+		SSIM            float64
 	}
 )
 

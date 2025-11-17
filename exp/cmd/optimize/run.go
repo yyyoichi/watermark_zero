@@ -136,16 +136,17 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 					}
 
 					testParams = append(testParams, TestParams{
-						BlockShapeH: bs[0],
-						BlockShapeW: bs[1],
-						D1:          d1d2[0],
-						D2:          d1d2[1],
-						Mark:        shuffledGolay,
-						TotalBlocks: totalBlocks,
-						ImageWidth:  width,
-						ImageHeight: height,
-						EmbedCount:  embedCount,
-						ImageName:   fmt.Sprintf("%03d", i+offset),
+						BlockShapeH:       bs[0],
+						BlockShapeW:       bs[1],
+						D1:                d1d2[0],
+						D2:                d1d2[1],
+						Mark:              shuffledGolay,
+						TotalBlocks:       totalBlocks,
+						ImageWidth:        width,
+						ImageHeight:       height,
+						EmbedCount:        embedCount,
+						ImageName:         fmt.Sprintf("%03d", i+offset),
+						OriginalImagePath: images.GetCachedImagePath(url, width, height),
 					})
 				}
 			}
@@ -158,7 +159,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 			// Create channels
 			numWorkers := runtime.GOMAXPROCS(0)
 			testParamsCh := make(chan TestParams, numWorkers)
-			resultCh := make(chan TestResult, len(testParams))
+			resultCh := make(chan *TestResult, len(testParams))
 
 			// Start worker goroutines
 			var wg sync.WaitGroup
@@ -187,11 +188,13 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 			// Collect results
 			for result := range resultCh {
+				if result == nil {
+					continue
+				}
 				params := result.TestParams
 
 				allResults = append(allResults, OptimizeResult{
-					OriginalImagePath: images.GetCachedImagePath(url, width, height),
-					EmbedImagePath:    params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
+					EmbedImagePath: params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
 
 					ImageSize:       sizeKey,
 					ImageWidth:      params.ImageWidth,
@@ -205,6 +208,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 					EncodedAccuracy: result.EncodedAccuracy,
 					DecodedAccuracy: result.DecodedAccuracy,
 					Success:         result.Success,
+					SSIM:            result.SSIM,
 				})
 			}
 		}
@@ -249,16 +253,17 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 // TestParams holds parameters for a single test
 type TestParams struct {
-	BlockShapeH int
-	BlockShapeW int
-	D1          int
-	D2          int
-	Mark        mark.Mark
-	TotalBlocks int
-	ImageWidth  int
-	ImageHeight int
-	EmbedCount  float64
-	ImageName   string
+	BlockShapeH       int
+	BlockShapeW       int
+	D1                int
+	D2                int
+	Mark              mark.Mark
+	TotalBlocks       int
+	ImageWidth        int
+	ImageHeight       int
+	EmbedCount        float64
+	ImageName         string
+	OriginalImagePath string
 }
 
 // TestResult holds the test outcome
@@ -267,9 +272,10 @@ type TestResult struct {
 	EncodedAccuracy float64
 	DecodedAccuracy float64
 	Success         bool
+	SSIM            float64
 }
 
-func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParams) TestResult {
+func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParams) *TestResult {
 	opts := []watermark.Option{
 		watermark.WithBlockShape(params.BlockShapeW, params.BlockShapeH),
 		watermark.WithD1D2(params.D1, params.D2),
@@ -286,7 +292,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 			log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Embed error: %v\n",
 				params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 				params.D1, params.D2, params.EmbedCount, err)
-			return TestResult{&params, 0.0, 0.0, false}
+			return nil
 		}
 
 		// Save embedded image for caching
@@ -296,7 +302,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 				params.ImageWidth,
 				params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 				params.D1, params.D2, params.EmbedCount, err)
-			return TestResult{&params, 0.0, 0.0, false}
+			return nil
 		}
 	}
 
@@ -305,7 +311,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Decode cached error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 			params.D1, params.D2, params.EmbedCount, err)
-		return TestResult{&params, 0.0, 0.0, false}
+		return nil
 	}
 
 	// Extract
@@ -314,7 +320,7 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Extract error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 			params.D1, params.D2, params.EmbedCount, err)
-		return TestResult{&params, 0.0, 0.0, false}
+		return nil
 	}
 
 	// Compare encoded
@@ -336,6 +342,12 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	}
 	decodedAccuracy := float64(decodedMatches) / float64(len(params.Mark.Original)) * 100
 
+	// Calculate SSIM
+	ssim, err := calculateSSIM(params.OriginalImagePath, embeddedPath)
+	if err != nil {
+		log.Printf("    [WARN] Failed to calculate SSIM: %v\n", err)
+	}
+
 	duration := time.Since(start)
 
 	var success = decodedMatches == len(params.Mark.Original)
@@ -343,12 +355,13 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	if success {
 		status = "OK"
 	}
-	log.Printf("    [%s] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f TB=%d - E=%.1f%% D=%.1f%% T=%v\n",
+	ssimStr := fmt.Sprintf(" SSIM=%.4f", ssim)
+	log.Printf("    [%s] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f TB=%d - E=%.1f%% D=%.1f%% T=%v%s\n",
 		status, params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 		params.D1, params.D2, params.EmbedCount, params.TotalBlocks,
-		encodedAccuracy, decodedAccuracy, duration)
+		encodedAccuracy, decodedAccuracy, duration, ssimStr)
 
-	return TestResult{&params, encodedAccuracy, decodedAccuracy, success}
+	return &TestResult{&params, encodedAccuracy, decodedAccuracy, success, ssim}
 }
 
 func (params TestParams) EmbeddedImagePath(embeddedDir string) string {
