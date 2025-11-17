@@ -60,10 +60,9 @@ func main() {
 		fmt.Println("\n=== Watermark Optimization Tool ===")
 		fmt.Println("1. Run optimization experiments (save to JSON)")
 		fmt.Println("2. Visualize results from JSON file")
-		fmt.Println("3. Analyze image quality degradation (SSIM vs Success Rate)")
-		fmt.Println("4. Start HTTP server to view visualizations")
-		fmt.Println("5. Exit")
-		fmt.Print("\nSelect an option (1-5): ")
+		fmt.Println("3. Start HTTP server to view visualizations")
+		fmt.Println("4. Exit")
+		fmt.Print("\nSelect an option (1-4): ")
 
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
@@ -145,30 +144,6 @@ func main() {
 
 			visualizeMain(inputFile, outputDir)
 		case "3":
-			fmt.Println("\n--- Analyzing Image Quality Degradation ---")
-
-			// Get input file path
-			fmt.Print("JSON file path to analyze: ")
-			inputFile, _ := reader.ReadString('\n')
-			inputFile = strings.TrimSpace(inputFile)
-
-			if inputFile == "" {
-				fmt.Println("Error: Input file path is required")
-				os.Exit(1)
-			}
-
-			// Get output directory
-			fmt.Printf("Output directory for quality analysis (default: %s): ", TmpOptimizeDir)
-			outputDir, _ := reader.ReadString('\n')
-			outputDir = strings.TrimSpace(outputDir)
-			if outputDir == "" {
-				outputDir = TmpOptimizeDir
-			}
-
-			fmt.Printf("\nAnalyzing quality: inputFile=%s, outputDir=%s\n\n", inputFile, outputDir)
-
-			qualityMain(inputFile, outputDir)
-		case "4":
 			fmt.Println("\n--- Starting HTTP Server ---")
 
 			// Get server directory
@@ -184,11 +159,11 @@ func main() {
 			fmt.Println()
 
 			startHTTPServer(serverDir)
-		case "5":
+		case "4":
 			fmt.Println("Exiting...")
 			os.Exit(0)
 		default:
-			fmt.Println("Invalid option. Please select 1-5.")
+			fmt.Println("Invalid option. Please select 1-4.")
 		}
 	}
 }

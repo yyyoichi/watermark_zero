@@ -65,6 +65,14 @@ func visualizeMain(inputFile, outputDir string) {
 		log.Printf("Generated: %s\n", heatmapPath)
 	}
 
+	// 3. Quality chart: SSIM vs Success Rate by D1D2
+	qualityPath := filepath.Join(outputDir, fmt.Sprintf("quality_ssim_vs_success_%s.html", baseName))
+	if err := generateQualityChart(data.Results, qualityPath); err != nil {
+		log.Printf("Failed to generate quality chart: %v\n", err)
+	} else {
+		log.Printf("Generated: %s\n", qualityPath)
+	}
+
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
 }
 
@@ -283,4 +291,166 @@ func generateHeatmap(results []OptimizeResult, outputPath string) error {
 	defer f.Close()
 
 	return heatmap.Render(f)
+}
+
+// generateQualityChart creates a dual-axis line chart with SSIM and Success Rate
+func generateQualityChart(results []OptimizeResult, outputPath string) error {
+	// Group results by D1D2
+	type d1d2Key struct {
+		d1, d2 int
+	}
+	type d1d2Stats struct {
+		d1          int
+		d2          int
+		avgSSIM     float64
+		successRate float64
+		sampleCount int
+	}
+
+	d1d2Groups := make(map[d1d2Key][]OptimizeResult)
+	for _, r := range results {
+		key := d1d2Key{r.D1, r.D2}
+		d1d2Groups[key] = append(d1d2Groups[key], r)
+	}
+
+	// Calculate SSIM and success rate for each D1D2 group
+	var stats []d1d2Stats
+	for key, groupResults := range d1d2Groups {
+		var totalSSIM float64
+		var successCount int
+		var validSSIMCount int
+
+		for _, r := range groupResults {
+			if r.SSIM > 0 {
+				totalSSIM += r.SSIM
+				validSSIMCount++
+			}
+
+			if r.Success {
+				successCount++
+			}
+		}
+
+		if validSSIMCount == 0 {
+			log.Printf("Warning: No valid SSIM data for D1=%d, D2=%d\n", key.d1, key.d2)
+			continue
+		}
+
+		avgSSIM := totalSSIM / float64(validSSIMCount)
+		successRate := float64(successCount) / float64(len(groupResults)) * 100
+
+		stats = append(stats, d1d2Stats{
+			d1:          key.d1,
+			d2:          key.d2,
+			avgSSIM:     avgSSIM,
+			successRate: successRate,
+			sampleCount: len(groupResults),
+		})
+	}
+
+	// Sort by D1 ascending, then D2 ascending
+	sort.Slice(stats, func(i, j int) bool {
+		if stats[i].d1 == stats[j].d1 {
+			return stats[i].d2 < stats[j].d2
+		}
+		return stats[i].d1 < stats[j].d1
+	})
+
+	line := charts.NewLine()
+
+	// Prepare X-axis data (D1*3 + D2 as numeric value)
+	var xAxisData []string
+	var ssimData []opts.LineData
+	var successData []opts.LineData
+
+	for _, s := range stats {
+		xAxisData = append(xAxisData, fmt.Sprintf("D1=%dxD2=%d", s.d1, s.d2))
+
+		ssimData = append(ssimData, opts.LineData{
+			Value: s.avgSSIM,
+			Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d)", s.d1, s.d2, s.avgSSIM, s.sampleCount),
+		})
+		successData = append(successData, opts.LineData{
+			Value: s.successRate,
+			Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d)", s.d1, s.d2, s.successRate, s.sampleCount),
+		})
+	}
+
+	line.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{
+			Title:    "Image Quality (SSIM) vs Success Rate by D1D2",
+			Subtitle: "Correlation between SSIM and watermark extraction success rate",
+		}),
+		charts.WithXAxisOpts(opts.XAxis{
+			Name: "D1*3 + D2",
+			Type: "category",
+			Data: xAxisData,
+		}),
+		charts.WithYAxisOpts(opts.YAxis{
+			Name: "SSIM",
+			Type: "value",
+			Min:  0.9,
+			Max:  1.0,
+			AxisLabel: &opts.AxisLabel{
+				Formatter: "{value}",
+			},
+		}),
+		charts.WithLegendOpts(opts.Legend{
+			Show: opts.Bool(true),
+			Top:  "5%",
+		}),
+		charts.WithTooltipOpts(opts.Tooltip{
+			Show:    opts.Bool(true),
+			Trigger: "axis",
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:  "slider",
+			Start: 0,
+			End:   100,
+		}),
+	)
+
+	// Set X-axis for line chart
+	line.SetXAxis(xAxisData)
+
+	// Add SSIM series (left Y-axis)
+	line.AddSeries("SSIM", ssimData).
+		SetSeriesOptions(
+			charts.WithLineChartOpts(opts.LineChart{
+				Smooth: opts.Bool(true),
+			}),
+			charts.WithLabelOpts(opts.Label{
+				Show: opts.Bool(false),
+			}),
+		)
+
+	// Extend Y-axis for dual axis (must be done before adding the second series)
+	line.ExtendYAxis(opts.YAxis{
+		Name: "Success Rate (%)",
+		Type: "value",
+		Min:  0,
+		Max:  100,
+		AxisLabel: &opts.AxisLabel{
+			Formatter: "{value}%",
+		},
+	})
+
+	// Add Success Rate series (right Y-axis)
+	line.AddSeries("Success Rate (%)", successData,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1, // Bind to the second Y-axis (right)
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+	)
+
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return line.Render(f)
 }
