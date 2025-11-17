@@ -99,6 +99,18 @@ func generateScatterPlot(results []OptimizeResult, targetEmbedLow, targetEmbedHi
 			Trigger:  "item",
 			Position: "bottom",
 		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:   "slider",
+			Start:  0,
+			End:    100,
+			Orient: "vertical",
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:   "slider",
+			Start:  0,
+			End:    100,
+			Orient: "horizontal",
+		}),
 	)
 
 	resultsByD12EC := make(map[string]map[string][]OptimizeResult)
