@@ -410,7 +410,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		charts.WithYAxisOpts(opts.YAxis{
 			Name: "SSIM",
 			Type: "value",
-			Min:  0.9,
+			Min:  0.97,
 			Max:  1.0,
 			AxisLabel: &opts.AxisLabel{
 				Formatter: "{value}",
