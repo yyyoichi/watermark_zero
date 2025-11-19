@@ -738,6 +738,36 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		}),
 	)
 
+	// Print statistics to stdout
+	fmt.Println("\n=== Quality Chart Data ===")
+	fmt.Println("D1D2\t\tSSIM(All)\tSSIM(EC<5)\tSSIM(EC>=5)\tSuccess(All)\tSuccess(EC<5)\tSuccess(EC>=5)")
+	fmt.Println("----\t\t---------\t----------\t-----------\t------------\t-------------\t--------------")
+	for _, s := range stats {
+		fmt.Printf("D1=%dx%d\t%.4f\t\t", s.d1, s.d2, s.avgSSIM)
+		if s.sampleCountLow > 0 {
+			fmt.Printf("%.4f\t\t", s.avgSSIMLow)
+		} else {
+			fmt.Printf("N/A\t\t")
+		}
+		if s.sampleCountHigh > 0 {
+			fmt.Printf("%.4f\t\t", s.avgSSIMHigh)
+		} else {
+			fmt.Printf("N/A\t\t")
+		}
+		fmt.Printf("%.1f%%\t\t", s.successRate)
+		if s.sampleCountLow > 0 {
+			fmt.Printf("%.1f%%\t\t", s.successRateLow)
+		} else {
+			fmt.Printf("N/A\t\t")
+		}
+		if s.sampleCountHigh > 0 {
+			fmt.Printf("%.1f%%\n", s.successRateHigh)
+		} else {
+			fmt.Printf("N/A\n")
+		}
+	}
+	fmt.Println()
+
 	f, err := os.Create(outputPath)
 	if err != nil {
 		return err
