@@ -323,7 +323,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		successRateLow        float64
 		sampleCountLow        int
 		avgDecodedAccuracyLow float64
-		// Stats for EmbedCount >= 5
+		// Stats for EmbedCount >= 8
 		avgSSIMHigh            float64
 		successRateHigh        float64
 		sampleCountHigh        int
@@ -351,7 +351,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		var totalDecodedAccuracyLow float64
 		var countLow int
 
-		// Stats for EmbedCount >= 5
+		// Stats for EmbedCount >= 8
 		var totalSSIMHigh float64
 		var successCountHigh int
 		var validSSIMCountHigh int
@@ -380,7 +380,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 				}
 				totalDecodedAccuracyLow += r.DecodedAccuracy
 				countLow++
-			} else {
+			} else if r.EmbedCount >= 8 {
 				if r.SSIM > 0 {
 					totalSSIMHigh += r.SSIM
 					validSSIMCountHigh++
@@ -415,7 +415,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			stat.avgDecodedAccuracyLow = totalDecodedAccuracyLow / float64(countLow)
 		}
 
-		// Calculate stats for EmbedCount >= 5
+		// Calculate stats for EmbedCount >= 8
 		if countHigh > 0 && validSSIMCountHigh > 0 {
 			stat.avgSSIMHigh = totalSSIMHigh / float64(validSSIMCountHigh)
 			stat.successRateHigh = float64(successCountHigh) / float64(countHigh) * 100
@@ -455,7 +455,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 	var successDataLow []opts.LineData
 	var decodedAccuracyDataLow []opts.LineData
 
-	// Data for EmbedCount >= 5
+	// Data for EmbedCount >= 8
 	var ssimDataHigh []opts.LineData
 	var successDataHigh []opts.LineData
 	var decodedAccuracyDataHigh []opts.LineData
@@ -497,19 +497,19 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			decodedAccuracyDataLow = append(decodedAccuracyDataLow, opts.LineData{Value: nil})
 		}
 
-		// EmbedCount >= 5 data
+		// EmbedCount >= 8 data
 		if s.sampleCountHigh > 0 {
 			ssimDataHigh = append(ssimDataHigh, opts.LineData{
 				Value: s.avgSSIMHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC>=5)", s.d1, s.d2, s.avgSSIMHigh, s.sampleCountHigh),
+				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC>=8)", s.d1, s.d2, s.avgSSIMHigh, s.sampleCountHigh),
 			})
 			successDataHigh = append(successDataHigh, opts.LineData{
 				Value: s.successRateHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC>=5)", s.d1, s.d2, s.successRateHigh, s.sampleCountHigh),
+				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC>=8)", s.d1, s.d2, s.successRateHigh, s.sampleCountHigh),
 			})
 			decodedAccuracyDataHigh = append(decodedAccuracyDataHigh, opts.LineData{
 				Value: s.avgDecodedAccuracyHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC>=5)", s.d1, s.d2, s.avgDecodedAccuracyHigh, s.sampleCountHigh),
+				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC>=8)", s.d1, s.d2, s.avgDecodedAccuracyHigh, s.sampleCountHigh),
 			})
 		} else {
 			ssimDataHigh = append(ssimDataHigh, opts.LineData{Value: nil})
@@ -600,7 +600,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		}),
 	)
 
-	line.AddSeries("SSIM (EC>=5)", ssimDataHigh,
+	line.AddSeries("SSIM (EC>=8)", ssimDataHigh,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth: opts.Bool(true),
 		}),
@@ -665,7 +665,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		}),
 	)
 
-	line.AddSeries("Success Rate (EC>=5)", successDataHigh,
+	line.AddSeries("Success Rate (EC>=8)", successDataHigh,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth:     opts.Bool(true),
 			YAxisIndex: 1,
@@ -720,7 +720,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		}),
 	)
 
-	line.AddSeries("Avg Decoded Accuracy (EC>=5)", decodedAccuracyDataHigh,
+	line.AddSeries("Avg Decoded Accuracy (EC>=8)", decodedAccuracyDataHigh,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth:     opts.Bool(true),
 			YAxisIndex: 1,
@@ -740,7 +740,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 
 	// Print statistics to stdout
 	fmt.Println("\n=== Quality Chart Data ===")
-	fmt.Println("D1D2\t\tSSIM(All)\tSSIM(EC<5)\tSSIM(EC>=5)\tSuccess(All)\tSuccess(EC<5)\tSuccess(EC>=5)")
+	fmt.Println("D1D2\t\tSSIM(All)\tSSIM(EC<5)\tSSIM(EC>=8)\tSuccess(All)\tSuccess(EC<5)\tSuccess(EC>=8)")
 	fmt.Println("----\t\t---------\t----------\t-----------\t------------\t-------------\t--------------")
 	for _, s := range stats {
 		fmt.Printf("D1=%dx%d\t%.4f\t\t", s.d1, s.d2, s.avgSSIM)
