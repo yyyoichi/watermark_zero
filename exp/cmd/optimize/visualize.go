@@ -318,6 +318,16 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		successRate        float64
 		sampleCount        int
 		avgDecodedAccuracy float64
+		// Stats for EmbedCount < 5
+		avgSSIMLow            float64
+		successRateLow        float64
+		sampleCountLow        int
+		avgDecodedAccuracyLow float64
+		// Stats for EmbedCount >= 5
+		avgSSIMHigh            float64
+		successRateHigh        float64
+		sampleCountHigh        int
+		avgDecodedAccuracyHigh float64
 	}
 
 	d1d2Groups := make(map[d1d2Key][]OptimizeResult)
@@ -334,16 +344,53 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		var validSSIMCount int
 		var totalDecodedAccuracy float64
 
+		// Stats for EmbedCount < 5
+		var totalSSIMLow float64
+		var successCountLow int
+		var validSSIMCountLow int
+		var totalDecodedAccuracyLow float64
+		var countLow int
+
+		// Stats for EmbedCount >= 5
+		var totalSSIMHigh float64
+		var successCountHigh int
+		var validSSIMCountHigh int
+		var totalDecodedAccuracyHigh float64
+		var countHigh int
+
 		for _, r := range groupResults {
+			// Overall stats
 			if r.SSIM > 0 {
 				totalSSIM += r.SSIM
 				validSSIMCount++
 			}
-
 			if r.Success {
 				successCount++
 			}
 			totalDecodedAccuracy += r.DecodedAccuracy
+
+			// Split by EmbedCount
+			if r.EmbedCount < 5 {
+				if r.SSIM > 0 {
+					totalSSIMLow += r.SSIM
+					validSSIMCountLow++
+				}
+				if r.Success {
+					successCountLow++
+				}
+				totalDecodedAccuracyLow += r.DecodedAccuracy
+				countLow++
+			} else {
+				if r.SSIM > 0 {
+					totalSSIMHigh += r.SSIM
+					validSSIMCountHigh++
+				}
+				if r.Success {
+					successCountHigh++
+				}
+				totalDecodedAccuracyHigh += r.DecodedAccuracy
+				countHigh++
+			}
 		}
 
 		if validSSIMCount == 0 {
@@ -351,17 +398,32 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			continue
 		}
 
-		avgSSIM := totalSSIM / float64(validSSIMCount)
-		successRate := float64(successCount) / float64(len(groupResults)) * 100
-
-		stats = append(stats, d1d2Stats{
+		stat := d1d2Stats{
 			d1:                 key.d1,
 			d2:                 key.d2,
-			avgSSIM:            avgSSIM,
-			successRate:        successRate,
+			avgSSIM:            totalSSIM / float64(validSSIMCount),
+			successRate:        float64(successCount) / float64(len(groupResults)) * 100,
 			sampleCount:        len(groupResults),
 			avgDecodedAccuracy: totalDecodedAccuracy / float64(len(groupResults)),
-		})
+		}
+
+		// Calculate stats for EmbedCount < 5
+		if countLow > 0 && validSSIMCountLow > 0 {
+			stat.avgSSIMLow = totalSSIMLow / float64(validSSIMCountLow)
+			stat.successRateLow = float64(successCountLow) / float64(countLow) * 100
+			stat.sampleCountLow = countLow
+			stat.avgDecodedAccuracyLow = totalDecodedAccuracyLow / float64(countLow)
+		}
+
+		// Calculate stats for EmbedCount >= 5
+		if countHigh > 0 && validSSIMCountHigh > 0 {
+			stat.avgSSIMHigh = totalSSIMHigh / float64(validSSIMCountHigh)
+			stat.successRateHigh = float64(successCountHigh) / float64(countHigh) * 100
+			stat.sampleCountHigh = countHigh
+			stat.avgDecodedAccuracyHigh = totalDecodedAccuracyHigh / float64(countHigh)
+		}
+
+		stats = append(stats, stat)
 	}
 
 	// Sort by D1 ascending, then D2 ascending
@@ -374,15 +436,34 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 
 	line := charts.NewLine()
 
+	// Set chart height to accommodate legend and data zoom
+	line.SetGlobalOptions(
+		charts.WithInitializationOpts(opts.Initialization{
+			Width:  "1400px",
+			Height: "800px",
+		}),
+	)
+
 	// Prepare X-axis data (D1*3 + D2 as numeric value)
 	var xAxisData []string
 	var ssimData []opts.LineData
 	var successData []opts.LineData
 	var decodedAccuracyData []opts.LineData
 
+	// Data for EmbedCount < 5
+	var ssimDataLow []opts.LineData
+	var successDataLow []opts.LineData
+	var decodedAccuracyDataLow []opts.LineData
+
+	// Data for EmbedCount >= 5
+	var ssimDataHigh []opts.LineData
+	var successDataHigh []opts.LineData
+	var decodedAccuracyDataHigh []opts.LineData
+
 	for _, s := range stats {
 		xAxisData = append(xAxisData, fmt.Sprintf("D1=%dxD2=%d", s.d1, s.d2))
 
+		// Overall data
 		ssimData = append(ssimData, opts.LineData{
 			Value: s.avgSSIM,
 			Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d)", s.d1, s.d2, s.avgSSIM, s.sampleCount),
@@ -395,12 +476,54 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			Value: s.avgDecodedAccuracy,
 			Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d)", s.d1, s.d2, s.avgDecodedAccuracy, s.sampleCount),
 		})
+
+		// EmbedCount < 5 data
+		if s.sampleCountLow > 0 {
+			ssimDataLow = append(ssimDataLow, opts.LineData{
+				Value: s.avgSSIMLow,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC<5)", s.d1, s.d2, s.avgSSIMLow, s.sampleCountLow),
+			})
+			successDataLow = append(successDataLow, opts.LineData{
+				Value: s.successRateLow,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC<5)", s.d1, s.d2, s.successRateLow, s.sampleCountLow),
+			})
+			decodedAccuracyDataLow = append(decodedAccuracyDataLow, opts.LineData{
+				Value: s.avgDecodedAccuracyLow,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC<5)", s.d1, s.d2, s.avgDecodedAccuracyLow, s.sampleCountLow),
+			})
+		} else {
+			ssimDataLow = append(ssimDataLow, opts.LineData{Value: nil})
+			successDataLow = append(successDataLow, opts.LineData{Value: nil})
+			decodedAccuracyDataLow = append(decodedAccuracyDataLow, opts.LineData{Value: nil})
+		}
+
+		// EmbedCount >= 5 data
+		if s.sampleCountHigh > 0 {
+			ssimDataHigh = append(ssimDataHigh, opts.LineData{
+				Value: s.avgSSIMHigh,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC>=5)", s.d1, s.d2, s.avgSSIMHigh, s.sampleCountHigh),
+			})
+			successDataHigh = append(successDataHigh, opts.LineData{
+				Value: s.successRateHigh,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC>=5)", s.d1, s.d2, s.successRateHigh, s.sampleCountHigh),
+			})
+			decodedAccuracyDataHigh = append(decodedAccuracyDataHigh, opts.LineData{
+				Value: s.avgDecodedAccuracyHigh,
+				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC>=5)", s.d1, s.d2, s.avgDecodedAccuracyHigh, s.sampleCountHigh),
+			})
+		} else {
+			ssimDataHigh = append(ssimDataHigh, opts.LineData{Value: nil})
+			successDataHigh = append(successDataHigh, opts.LineData{Value: nil})
+			decodedAccuracyDataHigh = append(decodedAccuracyDataHigh, opts.LineData{Value: nil})
+		}
 	}
 
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
 			Title:    "Image Quality (SSIM) vs Success Rate by D1D2",
 			Subtitle: "Correlation between SSIM and watermark extraction success rate",
+			Top:      "2%",
+			Left:     "center",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "D1*3 + D2",
@@ -417,8 +540,10 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			},
 		}),
 		charts.WithLegendOpts(opts.Legend{
-			Show: opts.Bool(true),
-			Top:  "5%",
+			Show:   opts.Bool(true),
+			Top:    "12%",
+			Left:   "center",
+			Orient: "horizontal",
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
 			Show:    opts.Bool(true),
@@ -429,21 +554,68 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 			Start: 0,
 			End:   100,
 		}),
+		charts.WithGridOpts(opts.Grid{
+			Top:    "25%",
+			Bottom: "15%",
+			Left:   "8%",
+			Right:  "8%",
+		}),
 	)
 
 	// Set X-axis for line chart
 	line.SetXAxis(xAxisData)
 
-	// Add SSIM series (left Y-axis)
-	line.AddSeries("SSIM", ssimData).
-		SetSeriesOptions(
-			charts.WithLineChartOpts(opts.LineChart{
-				Smooth: opts.Bool(true),
-			}),
-			charts.WithLabelOpts(opts.Label{
-				Show: opts.Bool(false),
-			}),
-		)
+	// Add SSIM series (left Y-axis) - Blue color family
+	line.AddSeries("SSIM (All)", ssimData,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth: opts.Bool(true),
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#1f77b4", // Solid blue
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#1f77b4",
+			Width: 3,
+			Type:  "solid",
+		}),
+	)
+
+	line.AddSeries("SSIM (EC<5)", ssimDataLow,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth: opts.Bool(true),
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#1f77b4", // Same blue
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#1f77b4",
+			Width: 2,
+			Type:  "dashed",
+		}),
+	)
+
+	line.AddSeries("SSIM (EC>=5)", ssimDataHigh,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth: opts.Bool(true),
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#1f77b4", // Same blue
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#1f77b4",
+			Width: 2,
+			Type:  "dotted",
+		}),
+	)
 
 	// Extend Y-axis for dual axis (must be done before adding the second series)
 	line.ExtendYAxis(opts.YAxis{
@@ -456,24 +628,113 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		},
 	})
 
-	// Add Success Rate series (right Y-axis)
-	line.AddSeries("Success Rate (%)", successData,
+	// Add Success Rate series (right Y-axis) - Green color family
+	line.AddSeries("Success Rate (All)", successData,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth:     opts.Bool(true),
 			YAxisIndex: 1, // Bind to the second Y-axis (right)
 		}),
 		charts.WithLabelOpts(opts.Label{
 			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#2ca02c", // Solid green
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#2ca02c",
+			Width: 3,
+			Type:  "solid",
 		}),
 	)
-	// Add Decoded Accuracy series (right Y-axis)
-	line.AddSeries("Avg Decoded Accuracy (%)", decodedAccuracyData,
+
+	line.AddSeries("Success Rate (EC<5)", successDataLow,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1,
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#2ca02c", // Same green
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#2ca02c",
+			Width: 2,
+			Type:  "dashed",
+		}),
+	)
+
+	line.AddSeries("Success Rate (EC>=5)", successDataHigh,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1,
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#2ca02c", // Same green
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#2ca02c",
+			Width: 2,
+			Type:  "dotted",
+		}),
+	)
+
+	// Add Decoded Accuracy series (right Y-axis) - Orange color family
+	line.AddSeries("Avg Decoded Accuracy (All)", decodedAccuracyData,
 		charts.WithLineChartOpts(opts.LineChart{
 			Smooth:     opts.Bool(true),
 			YAxisIndex: 1, // Bind to the second Y-axis (right)
 		}),
 		charts.WithLabelOpts(opts.Label{
 			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#ff7f0e", // Solid orange
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#ff7f0e",
+			Width: 3,
+			Type:  "solid",
+		}),
+	)
+
+	line.AddSeries("Avg Decoded Accuracy (EC<5)", decodedAccuracyDataLow,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1,
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#ff7f0e", // Same orange
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#ff7f0e",
+			Width: 2,
+			Type:  "dashed",
+		}),
+	)
+
+	line.AddSeries("Avg Decoded Accuracy (EC>=5)", decodedAccuracyDataHigh,
+		charts.WithLineChartOpts(opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1,
+		}),
+		charts.WithLabelOpts(opts.Label{
+			Show: opts.Bool(false),
+		}),
+		charts.WithItemStyleOpts(opts.ItemStyle{
+			Color: "#ff7f0e", // Same orange
+		}),
+		charts.WithLineStyleOpts(opts.LineStyle{
+			Color: "#ff7f0e",
+			Width: 2,
+			Type:  "dotted",
 		}),
 	)
 
