@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"exp/internal/db"
 	"exp/internal/images"
 	"exp/internal/mark"
 	"fmt"
@@ -116,6 +117,28 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 	shuffledGolay := mark.NewShuffledGolayMark(TEST_MARK)
 
+	// Open database
+	dbPath := filepath.Join(TmpOptimizeJsonsDir, "optimize_results.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	defer database.Close()
+	log.Printf("Database opened: %s\n", dbPath)
+
+	// Insert or get mark and ecc_mark
+	markBytes := db.BoolSliceToBytes(TEST_MARK)
+	markID, err := database.InsertMark(markBytes, len(TEST_MARK))
+	if err != nil {
+		log.Fatalf("Failed to insert mark: %v", err)
+	}
+
+	encodedBytes := db.BoolSliceToBytes(shuffledGolay.Encoded)
+	eccMarkID, err := database.InsertECCMark(markID, encodedBytes, len(shuffledGolay.Encoded), "ShuffledGolay")
+	if err != nil {
+		log.Fatalf("Failed to insert ECC mark: %v", err)
+	}
+
 	log.Printf("Starting D1/D2 optimization with %d images (offset=%d)\n", len(urls), offset)
 	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
 		len(imageSizes), len(blockShapes), len(d1d2Pairs), len(imageSizes)*len(blockShapes)*len(d1d2Pairs))
@@ -208,6 +231,46 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 				}
 				params := result.TestParams
 
+				// Insert or get image
+				imageID, err := database.InsertImage(url)
+				if err != nil {
+					log.Printf("Failed to insert image: %v", err)
+					continue
+				}
+
+				// Insert or get image size
+				imageSizeID, err := database.InsertImageSize(imageID, params.ImageWidth, params.ImageHeight)
+				if err != nil {
+					log.Printf("Failed to insert image size: %v", err)
+					continue
+				}
+
+				// Insert or get mark param
+				markParamID, err := database.InsertMarkParam(params.BlockShapeH, params.BlockShapeW, params.D1, params.D2)
+				if err != nil {
+					log.Printf("Failed to insert mark param: %v", err)
+					continue
+				}
+
+				// Insert result to database
+				dbResult := &db.Result{
+					ImageSizeID:       imageSizeID,
+					ECCMarkID:         eccMarkID,
+					MarkParamID:       markParamID,
+					OriginalImagePath: params.OriginalImagePath,
+					EmbedImagePath:    params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
+					EmbedCount:        params.EmbedCount,
+					TotalBlocks:       params.TotalBlocks,
+					EncodedAccuracy:   result.EncodedAccuracy,
+					DecodedAccuracy:   result.DecodedAccuracy,
+					Success:           result.Success,
+					SSIM:              result.SSIM,
+				}
+
+				if _, err := database.InsertResult(dbResult); err != nil {
+					log.Printf("Failed to insert result: %v", err)
+				}
+
 				allResults = append(allResults, OptimizeResult{
 					EmbedImagePath: params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
 
@@ -231,6 +294,15 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 	log.Printf("\n=== Optimization Complete ===\n")
 	log.Printf("Total test results: %d\n", len(allResults))
+
+	// Get database statistics
+	dbCount, err := database.CountResults()
+	if err != nil {
+		log.Printf("Failed to count results: %v", err)
+	} else {
+		log.Printf("Total results in database: %d\n", dbCount)
+	}
+
 	log.Printf("Generating visualizations...\n")
 
 	// Generate visualizations
