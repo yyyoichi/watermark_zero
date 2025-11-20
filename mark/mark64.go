@@ -2,7 +2,6 @@ package mark
 
 import (
 	"github.com/yyyoichi/bitstream-go"
-	"github.com/yyyoichi/golay"
 	watermark "github.com/yyyoichi/watermark_zero"
 )
 
@@ -29,6 +28,9 @@ func new64(data []uint64, size int, opts ...Option) *Mark64 {
 	var mf markFactory
 	for _, opt := range opts {
 		opt(&mf)
+	}
+	if len(data) == 0 {
+		return NewBytes([]byte("Hello World"), opts...)
 	}
 	if max := len(data) * 64; max < size || size < 1 {
 		size = max
@@ -89,24 +91,24 @@ func (m *Mark64) NewDecoder(bits []bool) watermark.MarkDecoder {
 }
 
 func (m *Mark64) DecodeToBytes() []byte {
-	var decoded []byte
-	_ = golay.DecodeBinay(m.reader.Data(), &decoded)
-	return decoded[:m.size/8]
+	r := m.mf.f.decode(m.reader.Data(), m.size)
+	var decoded = make([]byte, (m.size+7)/8)
+	for i := range decoded {
+		decoded[i] = r.Read8R(8, i)
+	}
+	return decoded
 }
 
 func (m *Mark64) DecodeToString() string {
-	var decoded []byte
-	_ = golay.DecodeBinay(m.reader.Data(), &decoded)
-	return string(decoded[:m.size/8])
+	return string(m.DecodeToBytes())
 }
 
 func (m *Mark64) DecodeToBools() []bool {
-	var decoded []uint64
-	_ = golay.DecodeBinay(m.reader.Data(), &decoded)
-	reader := bitstream.NewBitReader(decoded, 0, 0)
-	var data = make([]bool, m.size)
-	for i := range data {
-		data[i], _ = reader.ReadBitAt(i)
+	r := m.mf.f.decode(m.reader.Data(), m.size)
+	_ = r.Seek(0)
+	var decoded = make([]bool, m.size)
+	for i := range decoded {
+		decoded[i], _ = r.ReadBit()
 	}
-	return data
+	return decoded
 }
