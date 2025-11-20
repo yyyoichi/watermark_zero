@@ -14,21 +14,25 @@ func Example_watermark() {
 	img := image.NewGray(image.Rect(0, 0, 200, 200))
 	// Initialize watermark processor with default settings
 	w, _ := watermark.New(
-		watermark.WithBlockShape(4, 6),
+		watermark.WithBlockShape(4, 4),
 		watermark.WithD1D2(21, 11),
 	)
 
 	// Define a bit sequence to embed
-	mark := mark.NewString("Test-Mark")
+	m := mark.NewString("Test-Mark")
 
 	// Embed the watermark
-	markedImg, _ := w.Embed(ctx, img, mark)
+	markedImg, _ := w.Embed(ctx, img, m)
 
 	// Extract the watermark
-	extractedMark, _ := w.Extract(ctx, markedImg, mark)
+	extractedMark, _ := w.Extract(ctx, markedImg, m)
+	fmt.Println(extractedMark.DecodeToString())
+	exM := mark.NewExtract(m.ExtractSize())
+	extractedMark, _ = w.Extract(ctx, markedImg, exM)
 	fmt.Println(extractedMark.DecodeToString())
 
 	// Output:
+	// Test-Mark
 	// Test-Mark
 }
 
