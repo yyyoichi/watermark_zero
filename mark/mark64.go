@@ -10,8 +10,8 @@ var _ watermark.EmbedMark = (*Mark64)(nil)
 var _ watermark.ExtractMark = (*Mark64)(nil)
 var _ watermark.MarkDecoder = (*Mark64)(nil)
 
-// Mark64 is an implementation of the EmbedMark interface that manages
-// embedded mark bits based on uint64.
+// Mark64 is a struct that implements EmbedMark, ExtractMark, and MarkDecoder interfaces.
+// It manages embedded mark bits based on uint64.
 type Mark64 struct {
 	size   int
 	reader *bitstream.BitReader[uint64]
@@ -19,8 +19,9 @@ type Mark64 struct {
 }
 
 // new64 initializes and returns a new Mark64 instance.
-// By default, it uses the Golay code with shuffle error correction algorithm.
-// Custom options can be provided to change the encoding behavior.
+// It receives mark data as []uint64, where size specifies the number of valid bits.
+// By default, it applies Golay23 encoding to add redundancy to the mark.
+// If data is empty, it uses "Hello World" represented as []uint64 as the mark.
 func new64(data []uint64, size int, opts ...Option) *Mark64 {
 	if len(opts) == 0 {
 		opts = append(opts, WithGolay(DefaultShuffleSeed))
@@ -46,6 +47,8 @@ func new64(data []uint64, size int, opts ...Option) *Mark64 {
 	}
 }
 
+// NewExtract receives the bit length of the embedded mark and returns an interface for extracting watermarks.
+// Extraction requires the same size and opts as used during embedding.
 func NewExtract(size int, opts ...Option) watermark.ExtractMark {
 	if len(opts) == 0 {
 		opts = append(opts, WithGolay(DefaultShuffleSeed))
@@ -67,15 +70,21 @@ func (m *Mark64) GetBit(at int) float64 {
 	return float64(m.reader.Read8R(1, n))
 }
 
-// Len returns the total number of bits in the mark.
+// Len returns the bit length of the encoded mark after applying error correction.
+// This is typically used internally and rarely needs to be called directly by users.
 func (m *Mark64) Len() int {
 	return m.mf.f.encodedLen(m.size)
 }
 
+// ExtractSize returns the bit length required for watermark extraction.
+// For bool marks, this is the slice length; for string marks, it's len([]byte(str)) * 8;
+// for byte marks, it's len(bytes) * 8.
 func (m *Mark64) ExtractSize() int {
 	return m.size
 }
 
+// NewDecoder receives the extracted bit sequence from the watermark and initializes a MarkDecoder.
+// This is typically used internally and rarely needs to be called directly by users.
 func (m *Mark64) NewDecoder(bits []bool) watermark.MarkDecoder {
 	w := bitstream.NewBitWriter[uint64](0, 0)
 	for _, v := range bits {
@@ -90,6 +99,7 @@ func (m *Mark64) NewDecoder(bits []bool) watermark.MarkDecoder {
 	}
 }
 
+// DecodeToBytes decodes the extracted watermark data and returns it as a byte slice.
 func (m *Mark64) DecodeToBytes() []byte {
 	r := m.mf.f.decode(m.reader.Data(), m.size)
 	var decoded = make([]byte, (m.size+7)/8)
@@ -99,10 +109,14 @@ func (m *Mark64) DecodeToBytes() []byte {
 	return decoded
 }
 
+// DecodeToString decodes the extracted watermark data and returns it as a string.
+// It internally calls DecodeToBytes and converts the result to a string.
 func (m *Mark64) DecodeToString() string {
 	return string(m.DecodeToBytes())
 }
 
+// DecodeToBools decodes the extracted watermark data and returns it as a boolean slice.
+// Each element represents a single bit of the original mark.
 func (m *Mark64) DecodeToBools() []bool {
 	r := m.mf.f.decode(m.reader.Data(), m.size)
 	_ = r.Seek(0)
