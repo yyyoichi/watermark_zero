@@ -5,7 +5,7 @@ go 1.24.10
 require (
 	github.com/stretchr/testify v1.11.1
 	github.com/yyyoichi/bitstream-go v0.2.0
-	github.com/yyyoichi/golay v0.1.3
+	github.com/yyyoichi/golay v0.2.0
 	gonum.org/v1/gonum v0.16.0
 )
 

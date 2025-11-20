@@ -6,8 +6,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/yyyoichi/bitstream-go v0.2.0 h1:mtDov1hxz58ez5j93F46PWLHXXJ8Zz2xFfX7bGRwKYM=
 github.com/yyyoichi/bitstream-go v0.2.0/go.mod h1:+zUAKGaVVfsRij0wcg1OXOY83/nwlQ2dGSoJwVSDCuU=
-github.com/yyyoichi/golay v0.1.3 h1:bdLJqfQLtvTq38/bptR8p/q381aXpCx/sxg4lezpAu0=
-github.com/yyyoichi/golay v0.1.3/go.mod h1:UKSZmrLZWJYnyHAtgcJ9i/8584qzdUXFu5WM2iggq2I=
+github.com/yyyoichi/golay v0.2.0 h1:eoymMhITLV46FAfJ29wtOh9qXRylQjv3H8+bOqPWzFk=
+github.com/yyyoichi/golay v0.2.0/go.mod h1:UKSZmrLZWJYnyHAtgcJ9i/8584qzdUXFu5WM2iggq2I=
 gonum.org/v1/gonum v0.16.0 h1:5+ul4Swaf3ESvrOnidPp4GZbzf0mxVQpDCYUQE7OJfk=
 gonum.org/v1/gonum v0.16.0/go.mod h1:fef3am4MQ93R2HHpKnLk4/Tbh/s0+wqD5nfa6Pnwy4E=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
