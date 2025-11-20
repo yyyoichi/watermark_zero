@@ -19,10 +19,10 @@ type Mark64 struct {
 	mf     markFactory
 }
 
-// New64 initializes and returns a new Mark64 instance.
+// new64 initializes and returns a new Mark64 instance.
 // By default, it uses the Golay code with shuffle error correction algorithm.
 // Custom options can be provided to change the encoding behavior.
-func New64(data []uint64, size int, opts ...Option) *Mark64 {
+func new64(data []uint64, size int, opts ...Option) *Mark64 {
 	if len(opts) == 0 {
 		opts = append(opts, WithGolay(DefaultShuffleSeed))
 	}
@@ -30,7 +30,7 @@ func New64(data []uint64, size int, opts ...Option) *Mark64 {
 	for _, opt := range opts {
 		opt(&mf)
 	}
-	if max := len(data) * 64; max < size {
+	if max := len(data) * 64; max < size || size < 1 {
 		size = max
 	}
 	var markLen int
@@ -44,6 +44,20 @@ func New64(data []uint64, size int, opts ...Option) *Mark64 {
 	}
 }
 
+func NewExtract(size int, opts ...Option) watermark.ExtractMark {
+	if len(opts) == 0 {
+		opts = append(opts, WithGolay(DefaultShuffleSeed))
+	}
+	var mf markFactory
+	for _, opt := range opts {
+		opt(&mf)
+	}
+	return &Mark64{
+		size: size,
+		mf:   mf,
+	}
+}
+
 // GetBit returns the bit value at the specified position as a float64.
 // The position wraps around using modulo if it exceeds the mark length.
 func (m *Mark64) GetBit(at int) float64 {
@@ -53,7 +67,7 @@ func (m *Mark64) GetBit(at int) float64 {
 
 // Len returns the total number of bits in the mark.
 func (m *Mark64) Len() int {
-	return m.reader.Bits()
+	return m.mf.f.encodedLen(m.size)
 }
 
 func (m *Mark64) ExtractSize() int {

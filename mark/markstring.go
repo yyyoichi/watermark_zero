@@ -7,5 +7,5 @@ func NewString(data string, opts ...Option) *Mark64 {
 	for _, v := range []byte(data) {
 		w.Write8(0, 8, v)
 	}
-	return New64(w.Data(), w.Bits(), opts...)
+	return new64(w.Data(), w.Bits(), opts...)
 }
