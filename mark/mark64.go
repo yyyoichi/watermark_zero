@@ -30,6 +30,9 @@ func New64(data []uint64, size int, opts ...Option) *Mark64 {
 	for _, opt := range opts {
 		opt(&mf)
 	}
+	if max := len(data) * 64; max < size {
+		size = max
+	}
 	var markLen int
 	data, markLen = mf.f.encode(data, size)
 	reader := bitstream.NewBitReader(data, 0, 0)
