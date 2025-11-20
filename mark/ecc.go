@@ -36,14 +36,17 @@ func (sg shuffledgolay) encode(data []uint64, size int) ([]uint64, int) {
 	return w.Data(), encodedLen
 }
 
-func (sg shuffledgolay) decode(data []bool, size int) *bitstream.BitReader[uint64] {
+func (sg shuffledgolay) decode(data []uint64, size int) *bitstream.BitReader[uint64] {
 	// reverse shuffle: create same permutation then apply inverse
-	index := sg.generatePermutation(len(data))
+	encodedLen := sg.encodedLen(size)
+	index := sg.generatePermutation(encodedLen)
 
 	// Apply inverse permutation
+	r := bitstream.NewBitReader(data, 0, 0)
 	w := bitstream.NewBitWriter[uint64](0, 0)
-	for i := range data {
-		w.WriteBitAt(index[i], data[i])
+	for i := range encodedLen {
+		v, _ := r.ReadBit()
+		w.WriteBitAt(index[i], v)
 	}
 
 	// decode
@@ -51,7 +54,7 @@ func (sg shuffledgolay) decode(data []bool, size int) *bitstream.BitReader[uint6
 	dec := golay.NewDecoder(w.Data(), w.Bits())
 	_ = dec.Decode(&decoded)
 
-	r := bitstream.NewBitReader(decoded, 0, 0)
+	r = bitstream.NewBitReader(decoded, 0, 0)
 	r.SetBits(size)
 	return r
 }
@@ -80,12 +83,8 @@ type withoutecc struct{}
 func (we withoutecc) encode(data []uint64, size int) ([]uint64, int) {
 	return data, size
 }
-func (we withoutecc) decode(data []bool, size int) *bitstream.BitReader[uint64] {
-	w := bitstream.NewBitWriter[uint64](0, 0)
-	for _, v := range data {
-		w.WriteBool(v)
-	}
-	reader := bitstream.NewBitReader(w.Data(), 0, 0)
+func (we withoutecc) decode(data []uint64, size int) *bitstream.BitReader[uint64] {
+	reader := bitstream.NewBitReader(data, 0, 0)
 	reader.SetBits(size)
 	return reader
 }

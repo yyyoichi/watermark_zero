@@ -17,7 +17,7 @@ type (
 	}
 	factroy interface {
 		encode(data []uint64, markSize int) ([]uint64, int)
-		decode(data []bool, size int) *bitstream.BitReader[uint64]
+		decode(data []uint64, size int) *bitstream.BitReader[uint64]
 		encodedLen(size int) int
 	}
 )

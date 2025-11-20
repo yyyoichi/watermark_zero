@@ -2,8 +2,6 @@ package mark
 
 import (
 	"testing"
-
-	"github.com/yyyoichi/bitstream-go"
 )
 
 func TestShuffledGolay(t *testing.T) {
@@ -26,18 +24,10 @@ func TestShuffledGolay(t *testing.T) {
 	t.Run("encode/decode", func(t *testing.T) {
 		original := []uint64{0x1234567890abcdef, 0xfedcba0987654321}
 		size := 128
-		encoded, l := sg.encode(original, size)
+		encoded, _ := sg.encode(original, size)
 
 		// Convert encoded data to bool slice
-		var reader *bitstream.BitReader[uint64]
-		{
-			bits := make([]bool, l)
-			r := bitstream.NewBitReader(encoded, 0, 0)
-			for i := range l {
-				bits[i] = r.Read8R(1, i) == 1
-			}
-			reader = sg.decode(bits, size)
-		}
+		reader := sg.decode(encoded, size)
 		if reader.Bits() != size {
 			t.Errorf("expected decoded bits %d, got %d", size, reader.Bits())
 		}
