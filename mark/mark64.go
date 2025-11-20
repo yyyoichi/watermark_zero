@@ -1,14 +1,24 @@
 package mark
 
-import "github.com/yyyoichi/bitstream-go"
+import (
+	"github.com/yyyoichi/bitstream-go"
+	watermark "github.com/yyyoichi/watermark_zero"
+)
 
-var _ EmbedMark = (*Mark64)(nil)
+var _ watermark.EmbedMark = (*Mark64)(nil)
 
 // Mark64 is an implementation of the EmbedMark interface that manages
 // embedded mark bits based on uint64.
-type Mark64 struct {
-	reader *bitstream.BitReader[uint64]
-}
+type (
+	Mark64 struct {
+		markSize int
+		reader   reader
+	}
+	reader interface {
+		Bits() int
+		Read8R(bits int, n int) uint8
+	}
+)
 
 // New64 initializes and returns a new Mark64 instance.
 // By default, it uses the Golay code with shuffle error correction algorithm.
@@ -21,11 +31,13 @@ func New64(data []uint64, markLen int, opts ...Option) *Mark64 {
 	for _, opt := range opts {
 		opt(&mf)
 	}
-	data, markLen = mf.encode(data, markLen)
+	var internalLen int
+	data, internalLen = mf.encode(data, markLen)
 	reader := bitstream.NewBitReader(data, 0, 0)
-	reader.SetBits(markLen)
+	reader.SetBits(internalLen)
 	return &Mark64{
-		reader: reader,
+		reader:   reader,
+		markSize: markLen,
 	}
 }
 
@@ -39,4 +51,8 @@ func (m *Mark64) GetBit(at int) float64 {
 // Len returns the total number of bits in the mark.
 func (m *Mark64) Len() int {
 	return m.reader.Bits()
+}
+
+func (m *Mark64) ExtractSize() int {
+	return m.markSize
 }

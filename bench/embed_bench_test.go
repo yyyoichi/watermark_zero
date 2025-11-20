@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/mark"
 )
 
 // BenchmarkEmbed_FHD_Table runs a table-driven set of embed benchmarks for FHD images
@@ -87,10 +88,10 @@ func createImage(width, height int) *image.RGBA {
 
 // createTestMark creates a test watermark bit sequence
 func createTestMark() watermark.EmbedMark {
-	return watermark.NewBoolEmbedMark([]bool{
+	return mark.NewBool([]bool{
 		true, false, true, true, false, false, true, false,
 		false, true, false, true, true, false, true, true,
 		true, true, false, false, true, false, false, true,
 		false, false, true, true, false, true, true, false,
-	})
+	}, mark.WithoutECC())
 }
