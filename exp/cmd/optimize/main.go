@@ -195,6 +195,7 @@ func main() {
 			startHTTPServer(serverDir)
 		case "4":
 			fmt.Println("Exiting...")
+			closeDatabase()
 			os.Exit(0)
 		default:
 			fmt.Println("Invalid option. Please select 1-4.")

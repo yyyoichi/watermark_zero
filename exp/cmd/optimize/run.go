@@ -118,15 +118,6 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 
 	shuffledGolay := markpkg.NewShuffledGolayMark(TEST_MARK)
 
-	// Open database
-	dbPath := filepath.Join(TmpOptimizeJsonsDir, "optimize_results.db")
-	database, err := db.Open(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
-	}
-	defer database.Close()
-	log.Printf("Database opened: %s\n", dbPath)
-
 	// Insert or get mark and ecc_mark
 	markBytes := db.BoolSliceToBytes(TEST_MARK)
 	markID, err := database.InsertMark(markBytes, len(TEST_MARK))
