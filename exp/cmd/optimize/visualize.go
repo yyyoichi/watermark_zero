@@ -303,245 +303,89 @@ func generateHeatmap(results []*db.DetailedResult, outputPath string) error {
 	return heatmap.Render(f)
 }
 
-// generateQualityChart creates a dual-axis line chart with SSIM and Success Rate
+// generateQualityChart creates a chart showing SSIM distribution by BlockSize and D1D2
+// X-axis: BlockSize (as categorical), grouped by D1D2 parameters
+// Y-axis: SSIM values
 func generateQualityChart(results []*db.DetailedResult, outputPath string) error {
-	// Group results by D1D2
+	// Group results by BlockSize and D1D2
+	type blockSizeKey struct {
+		h, w int
+	}
 	type d1d2Key struct {
 		d1, d2 int
 	}
-	type d1d2Stats struct {
-		d1                 int
-		d2                 int
-		avgSSIM            float64
-		successRate        float64
-		sampleCount        int
-		avgDecodedAccuracy float64
-		// Stats for EmbedCount < 5
-		avgSSIMLow            float64
-		successRateLow        float64
-		sampleCountLow        int
-		avgDecodedAccuracyLow float64
-		// Stats for EmbedCount >= 8
-		avgSSIMHigh            float64
-		successRateHigh        float64
-		sampleCountHigh        int
-		avgDecodedAccuracyHigh float64
+	type compositeKey struct {
+		blockSize blockSizeKey
+		d1d2      d1d2Key
 	}
 
-	d1d2Groups := make(map[d1d2Key][]*db.DetailedResult)
+	// Group by BlockSize and D1D2 combination
+	groups := make(map[compositeKey][]*db.DetailedResult)
+	blockSizes := make(map[blockSizeKey]bool)
+	d1d2Params := make(map[d1d2Key]bool)
+
 	for _, r := range results {
-		key := d1d2Key{r.D1, r.D2}
-		d1d2Groups[key] = append(d1d2Groups[key], r)
+		bsKey := blockSizeKey{r.BlockShapeH, r.BlockShapeW}
+		d1d2K := d1d2Key{r.D1, r.D2}
+		cKey := compositeKey{bsKey, d1d2K}
+		groups[cKey] = append(groups[cKey], r)
+		blockSizes[bsKey] = true
+		d1d2Params[d1d2K] = true
 	}
 
-	// Calculate SSIM and success rate for each D1D2 group
-	var stats []d1d2Stats
-	for key, groupResults := range d1d2Groups {
-		var totalSSIM float64
-		var successCount int
-		var validSSIMCount int
-		var totalDecodedAccuracy float64
-
-		// Stats for EmbedCount < 5
-		var totalSSIMLow float64
-		var successCountLow int
-		var validSSIMCountLow int
-		var totalDecodedAccuracyLow float64
-		var countLow int
-
-		// Stats for EmbedCount >= 8
-		var totalSSIMHigh float64
-		var successCountHigh int
-		var validSSIMCountHigh int
-		var totalDecodedAccuracyHigh float64
-		var countHigh int
-
-		for _, r := range groupResults {
-			// Overall stats
-			if r.SSIM > 0 {
-				totalSSIM += r.SSIM
-				validSSIMCount++
-			}
-			if r.Success {
-				successCount++
-			}
-			totalDecodedAccuracy += r.DecodedAccuracy
-
-			// Split by EmbedCount
-			if r.EmbedCount < 5 {
-				if r.SSIM > 0 {
-					totalSSIMLow += r.SSIM
-					validSSIMCountLow++
-				}
-				if r.Success {
-					successCountLow++
-				}
-				totalDecodedAccuracyLow += r.DecodedAccuracy
-				countLow++
-			} else if r.EmbedCount >= 8 {
-				if r.SSIM > 0 {
-					totalSSIMHigh += r.SSIM
-					validSSIMCountHigh++
-				}
-				if r.Success {
-					successCountHigh++
-				}
-				totalDecodedAccuracyHigh += r.DecodedAccuracy
-				countHigh++
-			}
-		}
-
-		if validSSIMCount == 0 {
-			log.Printf("Warning: No valid SSIM data for D1=%d, D2=%d\n", key.d1, key.d2)
-			continue
-		}
-
-		stat := d1d2Stats{
-			d1:                 key.d1,
-			d2:                 key.d2,
-			avgSSIM:            totalSSIM / float64(validSSIMCount),
-			successRate:        float64(successCount) / float64(len(groupResults)) * 100,
-			sampleCount:        len(groupResults),
-			avgDecodedAccuracy: totalDecodedAccuracy / float64(len(groupResults)),
-		}
-
-		// Calculate stats for EmbedCount < 5
-		if countLow > 0 && validSSIMCountLow > 0 {
-			stat.avgSSIMLow = totalSSIMLow / float64(validSSIMCountLow)
-			stat.successRateLow = float64(successCountLow) / float64(countLow) * 100
-			stat.sampleCountLow = countLow
-			stat.avgDecodedAccuracyLow = totalDecodedAccuracyLow / float64(countLow)
-		}
-
-		// Calculate stats for EmbedCount >= 8
-		if countHigh > 0 && validSSIMCountHigh > 0 {
-			stat.avgSSIMHigh = totalSSIMHigh / float64(validSSIMCountHigh)
-			stat.successRateHigh = float64(successCountHigh) / float64(countHigh) * 100
-			stat.sampleCountHigh = countHigh
-			stat.avgDecodedAccuracyHigh = totalDecodedAccuracyHigh / float64(countHigh)
-		}
-
-		stats = append(stats, stat)
+	// Get sorted keys
+	var sortedBlockSizes []blockSizeKey
+	for bs := range blockSizes {
+		sortedBlockSizes = append(sortedBlockSizes, bs)
 	}
-
-	// Sort by D1 ascending, then D2 ascending
-	sort.Slice(stats, func(i, j int) bool {
-		if stats[i].d1 == stats[j].d1 {
-			return stats[i].d2 < stats[j].d2
-		}
-		return stats[i].d1 < stats[j].d1
+	sort.Slice(sortedBlockSizes, func(i, j int) bool {
+		area1 := sortedBlockSizes[i].h * sortedBlockSizes[i].w
+		area2 := sortedBlockSizes[j].h * sortedBlockSizes[j].w
+		return area1 < area2
 	})
 
-	line := charts.NewLine()
-
-	// Set chart height to accommodate legend and data zoom
-	line.SetGlobalOptions(
-		charts.WithInitializationOpts(opts.Initialization{
-			Width:  "1400px",
-			Height: "800px",
-		}),
-	)
-
-	// Prepare X-axis data (D1*3 + D2 as numeric value)
-	var xAxisData []string
-	var ssimData []opts.LineData
-	var successData []opts.LineData
-	var decodedAccuracyData []opts.LineData
-
-	// Data for EmbedCount < 5
-	var ssimDataLow []opts.LineData
-	var successDataLow []opts.LineData
-	var decodedAccuracyDataLow []opts.LineData
-
-	// Data for EmbedCount >= 8
-	var ssimDataHigh []opts.LineData
-	var successDataHigh []opts.LineData
-	var decodedAccuracyDataHigh []opts.LineData
-
-	for _, s := range stats {
-		xAxisData = append(xAxisData, fmt.Sprintf("D1=%dxD2=%d", s.d1, s.d2))
-
-		// Overall data
-		ssimData = append(ssimData, opts.LineData{
-			Value: s.avgSSIM,
-			Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d)", s.d1, s.d2, s.avgSSIM, s.sampleCount),
-		})
-		successData = append(successData, opts.LineData{
-			Value: s.successRate,
-			Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d)", s.d1, s.d2, s.successRate, s.sampleCount),
-		})
-		decodedAccuracyData = append(decodedAccuracyData, opts.LineData{
-			Value: s.avgDecodedAccuracy,
-			Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d)", s.d1, s.d2, s.avgDecodedAccuracy, s.sampleCount),
-		})
-
-		// EmbedCount < 5 data
-		if s.sampleCountLow > 0 {
-			ssimDataLow = append(ssimDataLow, opts.LineData{
-				Value: s.avgSSIMLow,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC<5)", s.d1, s.d2, s.avgSSIMLow, s.sampleCountLow),
-			})
-			successDataLow = append(successDataLow, opts.LineData{
-				Value: s.successRateLow,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC<5)", s.d1, s.d2, s.successRateLow, s.sampleCountLow),
-			})
-			decodedAccuracyDataLow = append(decodedAccuracyDataLow, opts.LineData{
-				Value: s.avgDecodedAccuracyLow,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC<5)", s.d1, s.d2, s.avgDecodedAccuracyLow, s.sampleCountLow),
-			})
-		} else {
-			ssimDataLow = append(ssimDataLow, opts.LineData{Value: nil})
-			successDataLow = append(successDataLow, opts.LineData{Value: nil})
-			decodedAccuracyDataLow = append(decodedAccuracyDataLow, opts.LineData{Value: nil})
+	var sortedD1D2 []d1d2Key
+	for d := range d1d2Params {
+		sortedD1D2 = append(sortedD1D2, d)
+	}
+	sort.Slice(sortedD1D2, func(i, j int) bool {
+		if sortedD1D2[i].d1 == sortedD1D2[j].d1 {
+			return sortedD1D2[i].d2 < sortedD1D2[j].d2
 		}
+		return sortedD1D2[i].d1 < sortedD1D2[j].d1
+	})
 
-		// EmbedCount >= 8 data
-		if s.sampleCountHigh > 0 {
-			ssimDataHigh = append(ssimDataHigh, opts.LineData{
-				Value: s.avgSSIMHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: SSIM=%.4f (n=%d, EC>=8)", s.d1, s.d2, s.avgSSIMHigh, s.sampleCountHigh),
-			})
-			successDataHigh = append(successDataHigh, opts.LineData{
-				Value: s.successRateHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: Success=%.1f%% (n=%d, EC>=8)", s.d1, s.d2, s.successRateHigh, s.sampleCountHigh),
-			})
-			decodedAccuracyDataHigh = append(decodedAccuracyDataHigh, opts.LineData{
-				Value: s.avgDecodedAccuracyHigh,
-				Name:  fmt.Sprintf("D1=%d, D2=%d: DecodedAcc=%.1f%% (n=%d, EC>=8)", s.d1, s.d2, s.avgDecodedAccuracyHigh, s.sampleCountHigh),
-			})
-		} else {
-			ssimDataHigh = append(ssimDataHigh, opts.LineData{Value: nil})
-			successDataHigh = append(successDataHigh, opts.LineData{Value: nil})
-			decodedAccuracyDataHigh = append(decodedAccuracyDataHigh, opts.LineData{Value: nil})
+	// Build X-axis labels: BlockSize_D1xD2 combinations
+	var xLabels []string
+	var labelMapping []compositeKey
+
+	for _, bs := range sortedBlockSizes {
+		for _, d1d2 := range sortedD1D2 {
+			cKey := compositeKey{bs, d1d2}
+			if len(groups[cKey]) > 0 {
+				label := fmt.Sprintf("%dx%d\nD1=%d,D2=%d", bs.h, bs.w, d1d2.d1, d1d2.d2)
+				xLabels = append(xLabels, label)
+				labelMapping = append(labelMapping, cKey)
+			}
 		}
 	}
 
+	// Create line chart showing Median and Avg SSIM for each combination
+	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "Image Quality (SSIM) vs Success Rate by D1D2",
-			Subtitle: "Correlation between SSIM and watermark extraction success rate",
-			Top:      "2%",
-			Left:     "center",
+			Title:    "SSIM Distribution by BlockSize and D1D2",
+			Subtitle: "Median and Average SSIM for each BlockSize×D1D2 combination",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
-			Name: "D1*3 + D2",
+			Name: "BlockSize × D1D2",
 			Type: "category",
-			Data: xAxisData,
+			Data: xLabels,
 		}),
 		charts.WithYAxisOpts(opts.YAxis{
 			Name: "SSIM",
 			Type: "value",
-			Min:  0.97,
-			Max:  1.0,
-			AxisLabel: &opts.AxisLabel{
-				Formatter: "{value}",
-			},
-		}),
-		charts.WithLegendOpts(opts.Legend{
-			Show:   opts.Bool(true),
-			Top:    "12%",
-			Left:   "center",
-			Orient: "horizontal",
+			Min:  0.8,
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
 			Show:    opts.Bool(true),
@@ -552,217 +396,119 @@ func generateQualityChart(results []*db.DetailedResult, outputPath string) error
 			Start: 0,
 			End:   100,
 		}),
-		charts.WithGridOpts(opts.Grid{
-			Top:    "25%",
-			Bottom: "15%",
-			Left:   "8%",
-			Right:  "8%",
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:   "slider",
+			Orient: "vertical",
+			Start:  0,
+			End:    100,
 		}),
 	)
 
-	// Set X-axis for line chart
-	line.SetXAxis(xAxisData)
+	// Prepare data series for Median and Avg SSIM
+	var medianSSIMData []opts.LineData
+	var avgSSIMData []opts.LineData
 
-	// Add SSIM series (left Y-axis) - Blue color family
-	line.AddSeries("SSIM (All)", ssimData,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth: opts.Bool(true),
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#1f77b4", // Solid blue
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#1f77b4",
-			Width: 3,
-			Type:  "solid",
-		}),
-	)
+	for _, cKey := range labelMapping {
+		groupResults := groups[cKey]
+		var ssimValues []float64
+		var totalSSIM float64
 
-	line.AddSeries("SSIM (EC<5)", ssimDataLow,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth: opts.Bool(true),
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#1f77b4", // Same blue
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#1f77b4",
-			Width: 2,
-			Type:  "dashed",
-		}),
-	)
+		for _, r := range groupResults {
+			if r.SSIM > 0 {
+				ssimValues = append(ssimValues, r.SSIM)
+				totalSSIM += r.SSIM
+			}
+		}
 
-	line.AddSeries("SSIM (EC>=8)", ssimDataHigh,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth: opts.Bool(true),
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#1f77b4", // Same blue
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#1f77b4",
-			Width: 2,
-			Type:  "dotted",
-		}),
-	)
+		validCount := len(ssimValues)
+		avgSSIM := 0.0
+		medianSSIM := 0.0
 
-	// Extend Y-axis for dual axis (must be done before adding the second series)
-	line.ExtendYAxis(opts.YAxis{
-		Name: "Success Rate (%)",
-		Type: "value",
-		Min:  40,
-		Max:  100,
-		AxisLabel: &opts.AxisLabel{
-			Formatter: "{value}%",
-		},
-	})
+		if validCount > 0 {
+			avgSSIM = totalSSIM / float64(validCount)
 
-	// Add Success Rate series (right Y-axis) - Green color family
-	line.AddSeries("Success Rate (All)", successData,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1, // Bind to the second Y-axis (right)
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#2ca02c", // Solid green
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#2ca02c",
-			Width: 3,
-			Type:  "solid",
-		}),
-	)
+			// Calculate median
+			sort.Float64s(ssimValues)
+			if validCount%2 == 0 {
+				medianSSIM = (ssimValues[validCount/2-1] + ssimValues[validCount/2]) / 2
+			} else {
+				medianSSIM = ssimValues[validCount/2]
+			}
+		}
 
-	line.AddSeries("Success Rate (EC<5)", successDataLow,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1,
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#2ca02c", // Same green
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#2ca02c",
-			Width: 2,
-			Type:  "dashed",
-		}),
-	)
+		medianSSIMData = append(medianSSIMData, opts.LineData{
+			Value: medianSSIM,
+			Name:  fmt.Sprintf("Median: %.4f (n=%d)", medianSSIM, validCount),
+		})
+		avgSSIMData = append(avgSSIMData, opts.LineData{
+			Value: avgSSIM,
+			Name:  fmt.Sprintf("Avg: %.4f (n=%d)", avgSSIM, validCount),
+		})
+	}
 
-	line.AddSeries("Success Rate (EC>=8)", successDataHigh,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1,
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#2ca02c", // Same green
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#2ca02c",
-			Width: 2,
-			Type:  "dotted",
-		}),
-	)
-
-	// Add Decoded Accuracy series (right Y-axis) - Orange color family
-	line.AddSeries("Avg Decoded Accuracy (All)", decodedAccuracyData,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1, // Bind to the second Y-axis (right)
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#ff7f0e", // Solid orange
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#ff7f0e",
-			Width: 3,
-			Type:  "solid",
-		}),
-	)
-
-	line.AddSeries("Avg Decoded Accuracy (EC<5)", decodedAccuracyDataLow,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1,
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#ff7f0e", // Same orange
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#ff7f0e",
-			Width: 2,
-			Type:  "dashed",
-		}),
-	)
-
-	line.AddSeries("Avg Decoded Accuracy (EC>=8)", decodedAccuracyDataHigh,
-		charts.WithLineChartOpts(opts.LineChart{
-			Smooth:     opts.Bool(true),
-			YAxisIndex: 1,
-		}),
-		charts.WithLabelOpts(opts.Label{
-			Show: opts.Bool(false),
-		}),
-		charts.WithItemStyleOpts(opts.ItemStyle{
-			Color: "#ff7f0e", // Same orange
-		}),
-		charts.WithLineStyleOpts(opts.LineStyle{
-			Color: "#ff7f0e",
-			Width: 2,
-			Type:  "dotted",
-		}),
-	)
+	line.SetXAxis(xLabels).
+		AddSeries("Median SSIM", medianSSIMData,
+			charts.WithLineChartOpts(opts.LineChart{
+				Smooth: opts.Bool(true),
+			}),
+			charts.WithLineStyleOpts(opts.LineStyle{
+				Color: "#ff7f0e",
+				Width: 3,
+			}),
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color: "#ff7f0e",
+			}),
+		).
+		AddSeries("Avg SSIM", avgSSIMData,
+			charts.WithLineChartOpts(opts.LineChart{
+				Smooth: opts.Bool(true),
+			}),
+			charts.WithLineStyleOpts(opts.LineStyle{
+				Color: "#1f77b4",
+				Width: 3,
+				Type:  "dashed",
+			}),
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color: "#1f77b4",
+			}),
+		)
 
 	// Print statistics to stdout
-	fmt.Println("\n=== Quality Chart Data ===")
-	fmt.Println("D1D2\t\tSSIM(All)\tSSIM(EC<5)\tSSIM(EC>=8)\tSuccess(All)\tSuccess(EC<5)\tSuccess(EC>=8)")
-	fmt.Println("----\t\t---------\t----------\t-----------\t------------\t-------------\t--------------")
-	for _, s := range stats {
-		fmt.Printf("D1=%dx%d\t%.4f\t\t", s.d1, s.d2, s.avgSSIM)
-		if s.sampleCountLow > 0 {
-			fmt.Printf("%.4f\t\t", s.avgSSIMLow)
-		} else {
-			fmt.Printf("N/A\t\t")
+	fmt.Println("\n=== SSIM Distribution by BlockSize and D1D2 ===")
+	fmt.Println("BlockSize\tD1D2\t\tSamples\tMedian SSIM\tAvg SSIM")
+	fmt.Println("---------\t----\t\t-------\t-----------\t--------")
+
+	for _, cKey := range labelMapping {
+		groupResults := groups[cKey]
+		var ssimValues []float64
+		var totalSSIM float64
+
+		for _, r := range groupResults {
+			if r.SSIM > 0 {
+				ssimValues = append(ssimValues, r.SSIM)
+				totalSSIM += r.SSIM
+			}
 		}
-		if s.sampleCountHigh > 0 {
-			fmt.Printf("%.4f\t\t", s.avgSSIMHigh)
-		} else {
-			fmt.Printf("N/A\t\t")
+
+		validCount := len(ssimValues)
+		avgSSIM := 0.0
+		medianSSIM := 0.0
+
+		if validCount > 0 {
+			avgSSIM = totalSSIM / float64(validCount)
+
+			// Calculate median
+			sort.Float64s(ssimValues)
+			if validCount%2 == 0 {
+				medianSSIM = (ssimValues[validCount/2-1] + ssimValues[validCount/2]) / 2
+			} else {
+				medianSSIM = ssimValues[validCount/2]
+			}
 		}
-		fmt.Printf("%.1f%%\t\t", s.successRate)
-		if s.sampleCountLow > 0 {
-			fmt.Printf("%.1f%%\t\t", s.successRateLow)
-		} else {
-			fmt.Printf("N/A\t\t")
-		}
-		if s.sampleCountHigh > 0 {
-			fmt.Printf("%.1f%%\n", s.successRateHigh)
-		} else {
-			fmt.Printf("N/A\n")
-		}
+
+		fmt.Printf("%dx%d\t\tD1=%d,D2=%d\t%d\t%.4f\t\t%.4f\n",
+			cKey.blockSize.h, cKey.blockSize.w, cKey.d1d2.d1, cKey.d1d2.d2,
+			validCount, medianSSIM, avgSSIM)
 	}
 	fmt.Println()
 

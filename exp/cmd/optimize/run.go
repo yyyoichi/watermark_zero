@@ -122,7 +122,7 @@ func runMain(numImages, offset int) {
 						log.Printf("    Failed to check existing result: %v", err)
 						continue
 					} else if resultID != 0 {
-						continue
+						// continue
 					}
 					testParams = append(testParams, TestParams{
 						ImageID:     imageID,
