@@ -4,56 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var (
 	// TmpOptimizeDir is the base directory for optimization outputs
 	TmpOptimizeDir = "/tmp/optimize"
-	// TmpOptimizeJsonsDir is the directory for JSON output files
-	TmpOptimizeJsonsDir = "/tmp/optimize-jsons"
 	// TmpOptimizeEmbeddedImagesDir is the directory for embedded image cache
 	TmpOptimizeEmbeddedImagesDir = "/tmp/optimize-embedded-images"
-)
-
-type (
-	DataJsonFormat struct {
-		Params struct {
-			ImageSizes      [][]int
-			D1D2Pairs       [][]int
-			BlockShapes     [][]int
-			NumImages       int
-			Offset          int
-			TargetEmbedLow  float64
-			TargetEmbedHigh float64
-		}
-		Results []OptimizeResult `json:"results"`
-	}
-
-	// OptimizeResult holds test results for visualization
-	OptimizeResult struct {
-		OriginalImagePath string
-		EmbedImagePath    string
-
-		ImageSize   string
-		ImageWidth  int
-		ImageHeight int
-		BlockShapeW int
-		BlockShapeH int
-		D1          int
-		D2          int
-		EmbedCount  float64
-		TotalBlocks int
-
-		EncodedAccuracy float64
-		DecodedAccuracy float64
-		Success         bool
-		SSIM            float64
-	}
 )
 
 func main() {
@@ -61,8 +20,8 @@ func main() {
 
 	for {
 		fmt.Println("\n=== Watermark Optimization Tool ===")
-		fmt.Println("1. Run optimization experiments (save to JSON)")
-		fmt.Println("2. Visualize results from JSON file")
+		fmt.Println("1. Run optimization experiments (save to Database)")
+		fmt.Println("2. Visualize results from Database")
 		fmt.Println("3. Start HTTP server to view visualizations")
 		fmt.Println("4. Exit")
 		fmt.Print("\nSelect an option (1-4): ")
@@ -101,60 +60,19 @@ func main() {
 
 			runMain(numImages, offset)
 		case "2":
-			fmt.Println("\n--- Visualizing Results ---")
-
-			// Get JSON directory
-			fmt.Printf("JSON directory (default: %s): ", TmpOptimizeJsonsDir)
-			jsonDir, _ := reader.ReadString('\n')
-			jsonDir = strings.TrimSpace(jsonDir)
-			if jsonDir == "" {
-				jsonDir = TmpOptimizeJsonsDir
-			}
-
-			// List JSON files in the directory
-			jsonFiles, err := listJSONFiles(jsonDir)
-			if err != nil {
-				fmt.Printf("Error reading JSON directory: %v\n", err)
-				continue
-			}
-
-			if len(jsonFiles) == 0 {
-				fmt.Println("No JSON files found in the directory")
-				continue
-			}
-
-			// Display JSON files with indices (newest first)
-			fmt.Println("\nAvailable JSON files (newest first):")
-			for i, file := range jsonFiles {
-				fmt.Printf("  [%d] %s (modified: %s)\n", i+1, file.Name, file.ModTime.Format("2006-01-02 15:04:05"))
-			}
-
-			// Get file selection
-			fmt.Printf("\nSelect a JSON file (1-%d, default: 1): ", len(jsonFiles))
-			fileIndexStr, _ := reader.ReadString('\n')
-			fileIndexStr = strings.TrimSpace(fileIndexStr)
-			fileIndex := 1
-			if fileIndexStr != "" {
-				if val, err := strconv.Atoi(fileIndexStr); err == nil && val >= 1 && val <= len(jsonFiles) {
-					fileIndex = val
-				} else {
-					fmt.Printf("Invalid selection, using default (1)\n")
-				}
-			}
-
-			inputFile := jsonFiles[fileIndex-1].Path
+			fmt.Println("\n--- Visualizing Results from Database ---")
 
 			// Get output directory
-			fmt.Printf("\nOutput directory for visualizations (default: %s): ", TmpOptimizeDir)
+			fmt.Printf("Output directory for visualizations (default: %s): ", TmpOptimizeDir)
 			outputDir, _ := reader.ReadString('\n')
 			outputDir = strings.TrimSpace(outputDir)
 			if outputDir == "" {
 				outputDir = TmpOptimizeDir
 			}
 
-			fmt.Printf("\nVisualizing: inputFile=%s, outputDir=%s\n\n", inputFile, outputDir)
+			fmt.Printf("\nGenerating visualizations to: %s\n\n", outputDir)
 
-			visualizeMain(inputFile, outputDir)
+			visualizeMain(outputDir)
 		case "3":
 			fmt.Println("\n--- Starting HTTP Server ---")
 
@@ -184,49 +102,5 @@ func main() {
 func init() {
 	// mkdir tmp directories
 	os.MkdirAll(TmpOptimizeDir, 0755)
-	os.MkdirAll(TmpOptimizeJsonsDir, 0755)
 	os.MkdirAll(TmpOptimizeEmbeddedImagesDir, 0755)
-}
-
-// JSONFileInfo holds information about a JSON file
-type JSONFileInfo struct {
-	Name    string
-	Path    string
-	ModTime time.Time
-}
-
-// listJSONFiles lists all JSON files in a directory sorted by modification time (newest first)
-func listJSONFiles(dir string) ([]JSONFileInfo, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	var jsonFiles []JSONFileInfo
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		jsonFiles = append(jsonFiles, JSONFileInfo{
-			Name:    entry.Name(),
-			Path:    filepath.Join(dir, entry.Name()),
-			ModTime: info.ModTime(),
-		})
-	}
-
-	// Sort by modification time (newest first)
-	sort.Slice(jsonFiles, func(i, j int) bool {
-		return jsonFiles[i].ModTime.After(jsonFiles[j].ModTime)
-	})
-
-	return jsonFiles, nil
 }

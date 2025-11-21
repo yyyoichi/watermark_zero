@@ -10,11 +10,9 @@ type DetailedResult struct {
 	ID int64
 
 	// Image info
-	ImageURI    string
-	Width       int
-	Height      int
-	ImageWidth  int
-	ImageHeight int
+	ImageURI string
+	Width    int
+	Height   int
 
 	// Parameters
 	BlockShapeH int
@@ -23,9 +21,7 @@ type DetailedResult struct {
 	D2          int
 
 	// Mark info
-	ECCAlgo      string
-	EncodedSize  int
-	OriginalSize int
+	ECCAlgo string
 
 	// Metrics
 	EmbedCount      float64
@@ -34,13 +30,9 @@ type DetailedResult struct {
 	DecodedAccuracy float64
 	Success         bool
 	SSIM            float64
-
-	// Paths
-	OriginalImagePath string
-	EmbedImagePath    string
 }
 
-// QueryDetailed executes a query on the results_detailed view
+// QueryDetailed executes a query on the results_view view
 func (d *DB) QueryDetailed(query string, args ...interface{}) ([]*DetailedResult, error) {
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
@@ -61,22 +53,16 @@ func (d *DB) QueryDetailed(query string, args ...interface{}) ([]*DetailedResult
 			&r.D1,
 			&r.D2,
 			&r.ECCAlgo,
-			&r.EncodedSize,
-			&r.OriginalSize,
 			&r.EmbedCount,
 			&r.TotalBlocks,
 			&r.EncodedAccuracy,
 			&r.DecodedAccuracy,
 			&r.Success,
 			&r.SSIM,
-			&r.OriginalImagePath,
-			&r.EmbedImagePath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan: %w", err)
 		}
-		r.ImageWidth = r.Width
-		r.ImageHeight = r.Height
 		results = append(results, &r)
 	}
 	return results, rows.Err()
@@ -85,7 +71,7 @@ func (d *DB) QueryDetailed(query string, args ...interface{}) ([]*DetailedResult
 // GetSuccessfulResults returns successful results with SSIM above threshold
 func (d *DB) GetSuccessfulResults(minSSIM float64) ([]*DetailedResult, error) {
 	return d.QueryDetailed(`
-		SELECT * FROM results_detailed
+		SELECT * FROM results_view
 		WHERE success = 1 AND ssim >= ?
 		ORDER BY ssim DESC
 	`, minSSIM)
@@ -94,7 +80,7 @@ func (d *DB) GetSuccessfulResults(minSSIM float64) ([]*DetailedResult, error) {
 // GetResultsByEmbedCount returns results within embed count range
 func (d *DB) GetResultsByEmbedCount(minCount, maxCount float64) ([]*DetailedResult, error) {
 	return d.QueryDetailed(`
-		SELECT * FROM results_detailed
+		SELECT * FROM results_view
 		WHERE embed_count BETWEEN ? AND ?
 		ORDER BY embed_count
 	`, minCount, maxCount)
@@ -103,7 +89,7 @@ func (d *DB) GetResultsByEmbedCount(minCount, maxCount float64) ([]*DetailedResu
 // GetResultsByImageSize returns results for specific image dimensions
 func (d *DB) GetResultsByImageSize(width, height int) ([]*DetailedResult, error) {
 	return d.QueryDetailed(`
-		SELECT * FROM results_detailed
+		SELECT * FROM results_view
 		WHERE width = ? AND height = ?
 		ORDER BY success DESC, ssim DESC
 	`, width, height)
@@ -112,7 +98,7 @@ func (d *DB) GetResultsByImageSize(width, height int) ([]*DetailedResult, error)
 // GetResultsByD1D2 returns results for specific D1/D2 parameters
 func (d *DB) GetResultsByD1D2(d1, d2 int) ([]*DetailedResult, error) {
 	return d.QueryDetailed(`
-		SELECT * FROM results_detailed
+		SELECT * FROM results_view
 		WHERE d1 = ? AND d2 = ?
 		ORDER BY success DESC, ssim DESC
 	`, d1, d2)
@@ -141,7 +127,7 @@ func (d *DB) GetBestParameters(minSuccessRate float64) ([]*ParameterStats, error
 			AVG(CASE WHEN success THEN 1.0 ELSE 0.0 END) as success_rate,
 			AVG(ssim) as avg_ssim,
 			AVG(decoded_accuracy) as avg_accuracy
-		FROM results_detailed
+		FROM results_view
 		GROUP BY block_shape_h, block_shape_w, d1, d2
 		HAVING success_rate >= ?
 		ORDER BY success_rate DESC, avg_ssim DESC
@@ -188,7 +174,7 @@ func (d *DB) GetImageSizeStats() ([]*ImageSizeStats, error) {
 			AVG(CASE WHEN success THEN 1.0 ELSE 0.0 END) as success_rate,
 			AVG(ssim) as avg_ssim,
 			AVG(decoded_accuracy) as avg_accuracy
-		FROM results_detailed
+		FROM results_view
 		GROUP BY width, height
 		ORDER BY width, height
 	`)
@@ -238,7 +224,7 @@ func (d *DB) GetEmbedCountStats() ([]*EmbedCountStats, error) {
 			SUM(CASE WHEN success THEN 1 ELSE 0 END) as successes,
 			AVG(CASE WHEN success THEN 1.0 ELSE 0.0 END) as success_rate,
 			AVG(ssim) as avg_ssim
-		FROM results_detailed
+		FROM results_view
 		GROUP BY range
 		ORDER BY 
 			CASE range

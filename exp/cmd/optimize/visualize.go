@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"exp/internal/db"
 	"fmt"
 	"log"
 	"os"
@@ -12,27 +12,18 @@ import (
 	"github.com/go-echarts/go-echarts/v2/opts"
 )
 
-func visualizeMain(inputFile, outputDir string) {
-	if inputFile == "" {
-		log.Fatal("Input file path is required")
-	}
-
-	// Read JSON file
-	f, err := os.Open(inputFile)
+func visualizeMain(outputDir string) {
+	// Read detailed results from database using the view
+	results, err := database.QueryDetailed("SELECT * FROM results_view")
 	if err != nil {
-		log.Fatalf("Failed to open JSON file: %v", err)
-	}
-	defer f.Close()
-
-	var data DataJsonFormat
-	if err := json.NewDecoder(f).Decode(&data); err != nil {
-		log.Fatalf("Failed to decode JSON data: %v", err)
+		log.Fatalf("Failed to load results from database: %v", err)
 	}
 
-	log.Printf("Loaded %d test results from %s\n", len(data.Results), inputFile)
-	log.Printf("Parameters: NumImages=%d, Offset=%d, TargetEmbed=%.1f-%.1f\n",
-		data.Params.NumImages, data.Params.Offset,
-		data.Params.TargetEmbedLow, data.Params.TargetEmbedHigh)
+	log.Printf("Loaded %d test results from database\n", len(results))
+
+	if len(results) == 0 {
+		log.Fatal("No results found in database")
+	}
 
 	// Create output directory
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -42,16 +33,12 @@ func visualizeMain(inputFile, outputDir string) {
 	// Generate visualizations
 	log.Printf("Generating visualizations...\n")
 
-	// Extract base name from input file (without extension)
-	baseName := filepath.Base(inputFile)
-	ext := filepath.Ext(baseName)
-	if ext != "" {
-		baseName = baseName[:len(baseName)-len(ext)]
-	}
+	// Use timestamp as base name
+	baseName := "db_results"
 
 	// 1. Scatter plot: EmbedCount vs Success Rate
 	scatterPath := filepath.Join(outputDir, fmt.Sprintf("scatter_embedcount_vs_success_%s.html", baseName))
-	if err := generateScatterPlot(data.Results, data.Params.TargetEmbedLow, data.Params.TargetEmbedHigh, scatterPath); err != nil {
+	if err := generateScatterPlot(results, scatterPath); err != nil {
 		log.Printf("Failed to generate scatter plot: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", scatterPath)
@@ -59,7 +46,7 @@ func visualizeMain(inputFile, outputDir string) {
 
 	// 2. Heatmap: D1 vs D2
 	heatmapPath := filepath.Join(outputDir, fmt.Sprintf("heatmap_d1d2_%s.html", baseName))
-	if err := generateHeatmap(data.Results, heatmapPath); err != nil {
+	if err := generateHeatmap(results, heatmapPath); err != nil {
 		log.Printf("Failed to generate heatmap: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", heatmapPath)
@@ -67,7 +54,7 @@ func visualizeMain(inputFile, outputDir string) {
 
 	// 3. Quality chart: SSIM vs Success Rate by D1D2
 	qualityPath := filepath.Join(outputDir, fmt.Sprintf("quality_ssim_vs_success_%s.html", baseName))
-	if err := generateQualityChart(data.Results, qualityPath); err != nil {
+	if err := generateQualityChart(results, qualityPath); err != nil {
 		log.Printf("Failed to generate quality chart: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", qualityPath)
@@ -78,14 +65,25 @@ func visualizeMain(inputFile, outputDir string) {
 
 // generateScatterPlot creates a scatter plot of EmbedCount vs Success Rate
 // Each point is colored by D1D2 and shaped by BlockShape
-func generateScatterPlot(results []OptimizeResult, targetEmbedLow, targetEmbedHigh float64, outputPath string) error {
+func generateScatterPlot(results []*db.DetailedResult, outputPath string) error {
+	// Calculate embed count range from results
+	var minEmbed, maxEmbed float64 = 999999, 0
+	for _, r := range results {
+		if r.EmbedCount < minEmbed {
+			minEmbed = r.EmbedCount
+		}
+		if r.EmbedCount > maxEmbed {
+			maxEmbed = r.EmbedCount
+		}
+	}
+
 	scatter := charts.NewScatter()
 	scatter.SetGlobalOptions(
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "EmbedCount",
 			Type: "value",
-			Min:  targetEmbedLow,
-			Max:  targetEmbedHigh,
+			Min:  minEmbed,
+			Max:  maxEmbed,
 		}),
 		charts.WithYAxisOpts(opts.YAxis{
 			Name:         "Success Rate (%)",
@@ -113,12 +111,12 @@ func generateScatterPlot(results []OptimizeResult, targetEmbedLow, targetEmbedHi
 		}),
 	)
 
-	resultsByD12EC := make(map[string]map[string][]OptimizeResult)
+	resultsByD12EC := make(map[string]map[string][]*db.DetailedResult)
 	for _, r := range results {
 		d1d2Key := fmt.Sprintf("D1=%d,D2=%d", r.D1, r.D2)
 		ec := fmt.Sprintf("%.1f", r.EmbedCount)
 		if _, exists := resultsByD12EC[d1d2Key]; !exists {
-			resultsByD12EC[d1d2Key] = make(map[string][]OptimizeResult)
+			resultsByD12EC[d1d2Key] = make(map[string][]*db.DetailedResult)
 		}
 		resultsByD12EC[d1d2Key][ec] = append(resultsByD12EC[d1d2Key][ec], r)
 	}
@@ -199,7 +197,7 @@ func generateScatterPlot(results []OptimizeResult, targetEmbedLow, targetEmbedHi
 }
 
 // generateHeatmap creates a heatmap of D1 vs D2 with success rate as intensity
-func generateHeatmap(results []OptimizeResult, outputPath string) error {
+func generateHeatmap(results []*db.DetailedResult, outputPath string) error {
 	// Aggregate success rate by D1D2
 	type d1d2Key struct {
 		d1, d2 int
@@ -306,7 +304,7 @@ func generateHeatmap(results []OptimizeResult, outputPath string) error {
 }
 
 // generateQualityChart creates a dual-axis line chart with SSIM and Success Rate
-func generateQualityChart(results []OptimizeResult, outputPath string) error {
+func generateQualityChart(results []*db.DetailedResult, outputPath string) error {
 	// Group results by D1D2
 	type d1d2Key struct {
 		d1, d2 int
@@ -330,7 +328,7 @@ func generateQualityChart(results []OptimizeResult, outputPath string) error {
 		avgDecodedAccuracyHigh float64
 	}
 
-	d1d2Groups := make(map[d1d2Key][]OptimizeResult)
+	d1d2Groups := make(map[d1d2Key][]*db.DetailedResult)
 	for _, r := range results {
 		key := d1d2Key{r.D1, r.D2}
 		d1d2Groups[key] = append(d1d2Groups[key], r)

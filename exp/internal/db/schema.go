@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_image_sizes_dims ON image_sizes(width, height);
 CREATE INDEX IF NOT EXISTS idx_mark_params_d1d2 ON mark_params(d1, d2);
 
 -- View for easy querying with all details
-CREATE VIEW IF NOT EXISTS results_detailed AS
+CREATE VIEW IF NOT EXISTS results_view AS
 SELECT 
     r.id,
     
@@ -85,9 +85,7 @@ SELECT
     mp.d1,
     mp.d2,
     
-    em.algo_name as ecc_algo,
-    em.size as encoded_size,
-    m.size as original_size,
+    mea.algo_name as ecc_algo,
     
     r.embed_count,
     r.total_blocks,
@@ -96,9 +94,9 @@ SELECT
     r.success,
     r.ssim
 FROM results r
+JOIN images i ON r.image_id = i.id
 JOIN image_sizes isz ON r.image_size_id = isz.id
-JOIN images i ON isz.image_id = i.id
-JOIN ecc_marks em ON r.ecc_mark_id = em.id
-JOIN marks m ON em.mark_id = m.id
+JOIN marks m ON r.mark_id = m.id
+JOIN mark_ecc_algos mea ON r.mark_ecc_algo_id = mea.id
 JOIN mark_params mp ON r.mark_param_id = mp.id;
 `
