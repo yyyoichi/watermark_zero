@@ -20,8 +20,7 @@ func main() {
 		watermark.WithBlockShape(8, 6),
 		watermark.WithD1D2(36, 20),
 	)
-	var mark []bool
-	mark = strmark.Encode("@Copyright2025_USERXX")
+	mark := mark.NewString("@Copyright2025_USERXX")
 	markedImg, _ := w.Embed(context.Background(), img, mark)
 }
 

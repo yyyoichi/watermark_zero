@@ -37,11 +37,10 @@ func Wavelets(src ImageSource) []*dwt.Wavelets {
 	return wavelets
 }
 
-func Embed(ctx context.Context, src ImageSource, mark []bool, shape BlockShape, d1 int, d2 int, wavelets []*dwt.Wavelets, dctCache *dct.Cache) (image.Image, error) {
+func Embed(ctx context.Context, src ImageSource, mark EmbedMark, shape BlockShape, d1 int, d2 int, wavelets []*dwt.Wavelets, dctCache *dct.Cache) (image.Image, error) {
 	var (
 		totalBlocks = shape.TotalBlocks(src)
 		blockArea   = shape.blockArea()
-		mk          = embedMark(mark)
 	)
 
 	var embed func(s0, s1, bit float64) (r0 float64, r1 float64)
@@ -91,7 +90,7 @@ func Embed(ctx context.Context, src ImageSource, mark []bool, shape BlockShape, 
 			cA := wavelets[0]
 			for at := range totalBlocks {
 				data := cA[at*blockArea : (at+1)*blockArea : (at+1)*blockArea]
-				bit := mk.getBit(at)
+				bit := mark.GetBit(at)
 				d, idct := dcos.Exec(data)
 				s, isvd, err := svd.Exec(d)
 				if err != nil {
