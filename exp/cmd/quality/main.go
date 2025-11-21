@@ -12,9 +12,10 @@ import (
 	"time"
 
 	"exp/internal/images"
-	"exp/internal/mark"
+	markpkg "exp/internal/mark"
 
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/mark"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 )
 
@@ -26,7 +27,7 @@ type TestParams struct {
 	D1          int
 	D2          int
 
-	Mark mark.Mark
+	Mark markpkg.Mark
 	// meta
 	ImageWidth  int
 	EmbedCount  float64
@@ -142,10 +143,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to encode test mark: %v", err)
 	}
-	marks := []mark.Mark{
-		mark.NewNormalMark(testMark),
-		mark.NewGolayMark(testMark),
-		mark.NewShuffledGolayMark(testMark),
+	marks := []markpkg.Mark{
+		markpkg.NewNormalMark(testMark),
+		markpkg.NewGolayMark(testMark),
+		markpkg.NewShuffledGolayMark(testMark),
 	}
 
 	log.Printf("Starting quality evaluation with %d images\n", len(urls))
@@ -271,7 +272,7 @@ func main() {
 	printImageSizeComparison(grandTotalSizeStats, marks, imageSizes)
 }
 
-func printImageSizeComparison(sizeStatsMap map[string]*ImageSizeStats, marks []mark.Mark, imageSizes [][]int) {
+func printImageSizeComparison(sizeStatsMap map[string]*ImageSizeStats, marks []markpkg.Mark, imageSizes [][]int) {
 	if len(sizeStatsMap) == 0 {
 		log.Println("No data for image size comparison")
 		return
@@ -331,7 +332,8 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	start := time.Now()
 
 	// Embed using Mark.Encoded
-	markedImg, err := batch.Embed(ctx, params.Mark.Encoded, opts...)
+	m := mark.NewBools(params.Mark.Encoded, mark.WithoutECC())
+	markedImg, err := batch.Embed(ctx, m, opts...)
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - Embed error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
@@ -353,12 +355,13 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	}
 
 	// Extract
-	extracted, err := watermark.Extract(ctx, compressedImg, len(params.Mark.Encoded), opts...)
+	exm, err := watermark.Extract(ctx, compressedImg, m, opts...)
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BlockShape=%dx%d D1D2=%dx%d Mark=%s EmbedCount=%.2f TotalBlocks=%d - Extract error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeH, params.BlockShapeW, params.D1, params.D2, params.Mark.Name, params.EmbedCount, params.TotalBlocks, err)
 		return TestResult{&params, 0.0, 0.0}
 	}
+	extracted := exm.DecodeToBools()
 
 	// Verify 1: Compare extracted with Encoded
 	encodedMatches := 0

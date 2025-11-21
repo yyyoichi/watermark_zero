@@ -19,6 +19,7 @@ import (
 	markpkg "exp/internal/mark"
 
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/mark"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 )
 
@@ -86,7 +87,8 @@ func main() {
 					watermark.WithD1D2(d1d2[0], d1d2[1]),
 				}
 				batch := watermark.NewBatch(img)
-				markedImg, err := batch.Embed(ctx, golayMark.Encoded, opts...)
+				m := mark.NewBools(golayMark.Encoded, mark.WithoutECC())
+				markedImg, err := batch.Embed(ctx, m, opts...)
 				if err != nil {
 					log.Printf("embed error: %v", err)
 					continue
@@ -105,12 +107,12 @@ func main() {
 				}
 
 				// Extract
-				extracted, err := watermark.Extract(ctx, compressedImg, len(golayMark.Encoded), opts...)
+				exm, err := watermark.Extract(ctx, compressedImg, m, opts...)
 				if err != nil {
 					log.Printf("extract error: %v", err)
 					continue
 				}
-
+				extracted := exm.DecodeToBools()
 				// Compare encoded vs extracted and build heatmap overlay
 				// (lengths of encoded and extracted are guaranteed to match)
 				mismatches := make(map[int]bool)

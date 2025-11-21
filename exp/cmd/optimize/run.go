@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"exp/internal/db"
 	"exp/internal/images"
-	"exp/internal/mark"
+	markpkg "exp/internal/mark"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -20,6 +20,7 @@ import (
 
 	"github.com/yyyoichi/bitstream-go"
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/mark"
 	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 )
 
@@ -115,7 +116,7 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 		urls = urls[:numImages]
 	}
 
-	shuffledGolay := mark.NewShuffledGolayMark(TEST_MARK)
+	shuffledGolay := markpkg.NewShuffledGolayMark(TEST_MARK)
 
 	// Open database
 	dbPath := filepath.Join(TmpOptimizeJsonsDir, "optimize_results.db")
@@ -344,7 +345,7 @@ type TestParams struct {
 	BlockShapeW       int
 	D1                int
 	D2                int
-	Mark              mark.Mark
+	Mark              markpkg.Mark
 	TotalBlocks       int
 	ImageWidth        int
 	ImageHeight       int
@@ -372,9 +373,10 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 
 	embeddedPath := params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir)
 	embededJpeg, err := getEmbedImage(embeddedPath)
+	m := mark.NewBools(params.Mark.Encoded, mark.WithoutECC())
 	if err != nil {
 		// Embed
-		embeddedImg, err := batch.Embed(ctx, params.Mark.Encoded, opts...)
+		embeddedImg, err := batch.Embed(ctx, m, opts...)
 		if err != nil {
 			log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Embed error: %v\n",
 				params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
@@ -402,13 +404,14 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	}
 
 	// Extract
-	extracted, err := watermark.Extract(ctx, compressedImg, len(params.Mark.Encoded), opts...)
+	exm, err := watermark.Extract(ctx, compressedImg, m, opts...)
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Extract error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 			params.D1, params.D2, params.EmbedCount, err)
 		return nil
 	}
+	extracted := exm.DecodeToBools()
 
 	// Compare encoded
 	encodedMatches := 0
