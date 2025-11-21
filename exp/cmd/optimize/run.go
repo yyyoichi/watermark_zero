@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"exp/internal/db"
 	"exp/internal/images"
-	markpkg "exp/internal/mark"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -18,90 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yyyoichi/bitstream-go"
 	watermark "github.com/yyyoichi/watermark_zero"
 	"github.com/yyyoichi/watermark_zero/mark"
-	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
 )
 
-var TEST_MARK = func() []bool {
-	w := bitstream.NewBitWriter[uint64](0, 0)
-	for i := range wzeromark.MarkLen / 8 {
-		w.Write8(0, 8, uint8(i*2))
-	}
-	d := w.Data()
-	r := bitstream.NewBitReader(d, 0, 0)
-	var data = make([]bool, wzeromark.MarkLen)
-	for i := range data {
-		data[i] = r.Read8R(1, i) == 1
-	}
-	return data
-}()
-
-func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
+func runMain(numImages, offset int) {
 	ctx := context.Background()
 
-	// Generate image sizes focusing on EmbedCount 1~8 (threshold around 5)
-	// EmbedCount = TotalBlocks / EncodedBits
-	// For ShuffledGolay: EncodedBits = OriginalBits * 23/12 ≈ 1.92x
-	// With 8x8 blocks: EmbedCount ≈ (width * height) / 82432
-	imageSizes := [][]int{
-		// EmbedCount 0.5-1
-		{320, 180}, // ~0.79 (8x8)
-		// EmbedCount 1-2
-		{384, 216}, // ~1.01 (8x8)
-		{426, 240}, // ~1.24 (8x8)
-		{480, 270}, // ~1.57 (8x8)
-		{512, 288}, // ~1.79 (8x8)
-		// EmbedCount 2-4
-		{600, 338}, // ~2.46 (8x8)
-		{640, 360}, // ~2.79 (8x8)
-		{720, 405}, // ~3.53 (8x8)
-		{768, 432}, // ~4.02 (8x8)
-		// EmbedCount 4-6 (threshold area)
-		{800, 450}, // ~4.36 (8x8)
-		{854, 480}, // ~4.97 (8x8)
-		{896, 504}, // ~5.47 (8x8)
-		{960, 540}, // ~6.28 (8x8)
-		// EmbedCount 6-8
-		{1024, 576},  // ~7.16 (8x8)
-		{1280, 720},  // ~10.99 (8x8)
-		{1366, 768},  // ~11.89 (8x8)
-		{1440, 810},  // ~12.96 (8x8)
-		{1600, 900},  // ~14.43 (8x8)
-		{1920, 1080}, // ~17.32 (8x8)
-	}
-
-	// Block shape: Fixed to 8x8 only for focused analysis
-	blockShapes := [][]int{
-		{8, 8},
-		// {6, 6},
-		// {4, 4},
-	}
-
-	// D1/D2 parameter space for optimization
-	d1d2Pairs := [][]int{
-		// {21, 11},
-		// {21, 9},
-		// {21, 7},
-		// {21, 5},
-		// {21, 3},
-		// {19, 11},
-		{19, 9},
-		{19, 7},
-		// {19, 5},
-		// {19, 3},
-		// {17, 11},
-		{17, 9},
-		{17, 7},
-		// {17, 5},
-		// {17, 3},
-		// {15, 11},
-		{15, 9},
-		{15, 7},
-		// {15, 5},
-		// {15, 3},
-	} // Parsse image URLs
+	// Parse image URLs
 	urls := images.ParseURLs()
 	if len(urls) == 0 {
 		log.Fatal("No image URLs found")
@@ -116,32 +38,65 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 		urls = urls[:numImages]
 	}
 
-	shuffledGolay := markpkg.NewShuffledGolayMark(TEST_MARK)
-
-	// Insert or get mark and ecc_mark
-	markBytes := db.BoolSliceToBytes(TEST_MARK)
-	markID, err := database.InsertMark(markBytes, len(TEST_MARK))
-	if err != nil {
-		log.Fatalf("Failed to insert mark: %v", err)
-	}
-
-	encodedBytes := db.BoolSliceToBytes(shuffledGolay.Encoded)
-	eccMarkID, err := database.InsertECCMark(markID, encodedBytes, len(shuffledGolay.Encoded), "ShuffledGolay")
-	if err != nil {
-		log.Fatalf("Failed to insert ECC mark: %v", err)
-	}
-
 	log.Printf("Starting D1/D2 optimization with %d images (offset=%d)\n", len(urls), offset)
-	log.Printf("Total test cases per image: %d (image sizes) x %d (block shapes) x %d (d1/d2 pairs) = %d\n",
-		len(imageSizes), len(blockShapes), len(d1d2Pairs), len(imageSizes)*len(blockShapes)*len(d1d2Pairs))
 
-	var allResults []OptimizeResult
+	dbMarks, err := database.ListMarks()
+	if err != nil {
+		log.Fatalf("Failed to list marks: %v", err)
+	}
+	if len(dbMarks) == 0 {
+		log.Fatal("No marks found in database")
+	}
+	dbMark := dbMarks[0] // Use the first mark for testing
+	algos, err := database.ListMarkEccAlgos()
+	if err != nil {
+		log.Fatalf("Failed to list mark ECC algos: %v", err)
+	}
+	var marks = make([]TestMark, 0, len(algos))
+	{
+		for _, algo := range algos {
+			switch algo.AlgoName {
+			case EccAlgoShuffledGolay:
+				m := TestMark{
+					algo:     algo,
+					original: dbMark,
+					encoded:  mark.NewBytes(dbMark.Mark),
+				}
+				marks = append(marks, m)
+
+			case EccAlgoNoEcc:
+				m := TestMark{
+					algo:     algo,
+					original: dbMark,
+					encoded:  mark.NewBytes(dbMark.Mark, mark.WithoutECC()),
+				}
+				marks = append(marks, m)
+			}
+		}
+	}
+	// Get all image sizes for this image from DB
+	imageSizes, err := database.ListImageSizes()
+	if err != nil {
+		log.Printf("Failed to get image sizes: %v\n", err)
+	}
+	// Get mark params
+	markParams, err := database.ListMarkParams()
+	if err != nil {
+		log.Printf("Failed to list mark params: %v", err)
+	}
 
 	for i, url := range urls {
 		log.Printf("\n[%d/%d] Testing image: %s\n", i+1, len(urls), url)
 
-		for _, size := range imageSizes {
-			width, height := size[0], size[1]
+		// Get image ID from map (already registered in init)
+		imageID, err := database.InsertImage(url)
+		if err != nil {
+			log.Printf("Failed to insert image %s: %v", url, err)
+			continue
+		}
+
+		for _, imageSize := range imageSizes {
+			width, height := imageSize.Width, imageSize.Height
 			sizeKey := fmt.Sprintf("%dx%d", width, height)
 			log.Printf("  Size: %s\n", sizeKey)
 
@@ -154,26 +109,38 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 			batch := watermark.NewBatch(img)
 			rect := img.Bounds()
 
-			// Pre-calculate test parameters that pass the filter
 			var testParams []TestParams
-			for _, bs := range blockShapes {
-				for _, d1d2 := range d1d2Pairs {
-					totalBlocks := ((rect.Dx() + 1) / bs[1]) * ((rect.Dy() + 1) / bs[0])
-					embedCount := float64(totalBlocks) / float64(len(shuffledGolay.Encoded))
-
-					if embedCount < targetEmbedLow || embedCount > targetEmbedHigh {
+			for _, markParam := range markParams {
+				totalBlocks := ((rect.Dx() + 1) / markParam.BlockShapeW) * ((rect.Dy() + 1) / markParam.BlockShapeH)
+				for _, mk := range marks {
+					embedCount := float64(totalBlocks) / float64(mk.encoded.Len())
+					if embedCount < 1.0 || embedCount >= 16.0 {
 						continue
 					}
 
+					if resultID, err := database.ResultExists(imageID, imageSize.ID, mk.original.ID, mk.algo.ID, markParam.ID); err != nil {
+						log.Printf("    Failed to check existing result: %v", err)
+						continue
+					} else if resultID != 0 {
+						continue
+					}
 					testParams = append(testParams, TestParams{
-						BlockShapeH:       bs[0],
-						BlockShapeW:       bs[1],
-						D1:                d1d2[0],
-						D2:                d1d2[1],
-						Mark:              shuffledGolay,
+						ImageID:     imageID,
+						ImageSizeID: imageSize.ID,
+						MarkID:      mk.original.ID,
+						EccAlgoID:   mk.algo.ID,
+						MarkParamID: markParam.ID,
+
+						BlockShapeW: markParam.BlockShapeW,
+						BlockShapeH: markParam.BlockShapeH,
+						D1:          markParam.D1,
+						D2:          markParam.D2,
+						ImageWidth:  width,
+						ImageHeight: height,
+
+						Mark: mk,
+
 						TotalBlocks:       totalBlocks,
-						ImageWidth:        width,
-						ImageHeight:       height,
 						EmbedCount:        embedCount,
 						ImageName:         fmt.Sprintf("%03d", i+offset),
 						OriginalImagePath: images.GetCachedImagePath(url, width, height),
@@ -222,127 +189,51 @@ func runMain(numImages, offset int, targetEmbedLow, targetEmbedHigh float64) {
 					continue
 				}
 				params := result.TestParams
-
-				// Insert or get image
-				imageID, err := database.InsertImage(url)
-				if err != nil {
-					log.Printf("Failed to insert image: %v", err)
-					continue
-				}
-
-				// Insert or get image size
-				imageSizeID, err := database.InsertImageSize(imageID, params.ImageWidth, params.ImageHeight)
-				if err != nil {
-					log.Printf("Failed to insert image size: %v", err)
-					continue
-				}
-
-				// Insert or get mark param
-				markParamID, err := database.InsertMarkParam(params.BlockShapeH, params.BlockShapeW, params.D1, params.D2)
-				if err != nil {
-					log.Printf("Failed to insert mark param: %v", err)
-					continue
-				}
-
 				// Insert result to database
 				dbResult := &db.Result{
-					ImageSizeID:       imageSizeID,
-					ECCMarkID:         eccMarkID,
-					MarkParamID:       markParamID,
-					OriginalImagePath: params.OriginalImagePath,
-					EmbedImagePath:    params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
-					EmbedCount:        params.EmbedCount,
-					TotalBlocks:       params.TotalBlocks,
-					EncodedAccuracy:   result.EncodedAccuracy,
-					DecodedAccuracy:   result.DecodedAccuracy,
-					Success:           result.Success,
-					SSIM:              result.SSIM,
-				}
-
-				if _, err := database.InsertResult(dbResult); err != nil {
-					log.Printf("Failed to insert result: %v", err)
-				}
-
-				allResults = append(allResults, OptimizeResult{
-					EmbedImagePath: params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir),
-
-					ImageSize:       sizeKey,
-					ImageWidth:      params.ImageWidth,
-					ImageHeight:     params.ImageHeight,
-					BlockShapeW:     params.BlockShapeW,
-					BlockShapeH:     params.BlockShapeH,
-					D1:              params.D1,
-					D2:              params.D2,
+					ImageID:         params.ImageID,
+					ImageSizeID:     params.ImageSizeID,
+					MarkID:          params.MarkID,
+					MarkEccAlgoID:   params.Mark.algo.ID,
+					MarkParamID:     params.MarkParamID,
 					EmbedCount:      params.EmbedCount,
 					TotalBlocks:     params.TotalBlocks,
 					EncodedAccuracy: result.EncodedAccuracy,
 					DecodedAccuracy: result.DecodedAccuracy,
 					Success:         result.Success,
 					SSIM:            result.SSIM,
-				})
+				}
+
+				if _, err := database.InsertResult(dbResult); err != nil {
+					log.Printf("Failed to insert result: %v", err)
+				}
 			}
 		}
 	}
-
-	log.Printf("\n=== Optimization Complete ===\n")
-	log.Printf("Total test results: %d\n", len(allResults))
-
-	// Get database statistics
-	dbCount, err := database.CountResults()
-	if err != nil {
-		log.Printf("Failed to count results: %v", err)
-	} else {
-		log.Printf("Total results in database: %d\n", dbCount)
-	}
-
-	log.Printf("Generating visualizations...\n")
-
-	// Generate visualizations
-	outDir := TmpOptimizeJsonsDir
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		log.Fatalf("Failed to create output directory: %v", err)
-	}
-	// save as JSON and generate plots
-	// DataJsonFormat
-	var data = DataJsonFormat{
-		Results: allResults,
-	}
-	data.Params.ImageSizes = imageSizes
-	data.Params.BlockShapes = blockShapes
-	data.Params.D1D2Pairs = d1d2Pairs
-	data.Params.NumImages = len(urls)
-	data.Params.Offset = offset
-	data.Params.TargetEmbedLow = targetEmbedLow
-	data.Params.TargetEmbedHigh = targetEmbedHigh
-
-	filename := fmt.Sprintf("optimize_results_%d_images_offset_%d_ec-%.1f-%.1f.json", len(urls), offset, targetEmbedLow, targetEmbedHigh)
-	f, err := os.Create(filepath.Join(outDir, filename))
-	if err != nil {
-		log.Fatalf("Failed to create JSON file: %v", err)
-	}
-	defer f.Close()
-
-	if err := json.NewEncoder(f).Encode(data); err != nil {
-		log.Fatalf("Failed to encode JSON data: %v", err)
-	}
-
-	log.Printf("\nResults saved to: %s\n", outDir)
-	log.Println(filepath.Join(outDir, filename))
 }
 
 // TestParams holds parameters for a single test
 type TestParams struct {
-	BlockShapeH       int
-	BlockShapeW       int
-	D1                int
-	D2                int
-	Mark              markpkg.Mark
+	ImageID     int64
+	ImageSizeID int64
+	MarkID      int64
+	EccAlgoID   int64
+	MarkParamID int64
+
+	BlockShapeW, BlockShapeH int
+	D1, D2                   int
+	ImageWidth, ImageHeight  int
+
+	Mark              TestMark
 	TotalBlocks       int
-	ImageWidth        int
-	ImageHeight       int
 	EmbedCount        float64
 	ImageName         string
 	OriginalImagePath string
+}
+type TestMark struct {
+	algo     *db.MarkEccAlgo
+	original *db.Mark
+	encoded  *mark.Mark64
 }
 
 // TestResult holds the test outcome
@@ -364,10 +255,9 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 
 	embeddedPath := params.EmbeddedImagePath(TmpOptimizeEmbeddedImagesDir)
 	embededJpeg, err := getEmbedImage(embeddedPath)
-	m := mark.NewBools(params.Mark.Encoded, mark.WithoutECC())
 	if err != nil {
 		// Embed
-		embeddedImg, err := batch.Embed(ctx, m, opts...)
+		embeddedImg, err := batch.Embed(ctx, params.Mark.encoded, opts...)
 		if err != nil {
 			log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Embed error: %v\n",
 				params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
@@ -395,33 +285,15 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 	}
 
 	// Extract
-	exm, err := watermark.Extract(ctx, compressedImg, m, opts...)
+	extracted, err := watermark.Extract(ctx, compressedImg, params.Mark.encoded, opts...)
 	if err != nil {
 		log.Printf("    [FAIL] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f - Extract error: %v\n",
 			params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
 			params.D1, params.D2, params.EmbedCount, err)
 		return nil
 	}
-	extracted := exm.DecodeToBools()
 
-	// Compare encoded
-	encodedMatches := 0
-	for i := range params.Mark.Encoded {
-		if params.Mark.Encoded[i] == extracted[i] {
-			encodedMatches++
-		}
-	}
-	encodedAccuracy := float64(encodedMatches) / float64(len(params.Mark.Encoded)) * 100
-
-	// Decode and compare
-	decoded := params.Mark.Decode(extracted)
-	decodedMatches := 0
-	for i := range params.Mark.Original {
-		if params.Mark.Original[i] == decoded[i] {
-			decodedMatches++
-		}
-	}
-	decodedAccuracy := float64(decodedMatches) / float64(len(params.Mark.Original)) * 100
+	encodedAccuracy, decodedAccuracy, success := calcAccuracy(params.Mark.encoded, extracted.(*mark.Mark64))
 
 	// Calculate SSIM
 	ssim, err := calculateSSIM(params.OriginalImagePath, embeddedPath)
@@ -431,26 +303,27 @@ func testWatermark(ctx context.Context, batch *watermark.Batch, params TestParam
 
 	duration := time.Since(start)
 
-	var success = decodedMatches == len(params.Mark.Original)
 	status := "FAIL"
 	if success {
 		status = "OK"
 	}
 	ssimStr := fmt.Sprintf(" SSIM=%.4f", ssim)
-	log.Printf("    [%s] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f TB=%d - E=%.1f%% D=%.1f%% T=%v%s\n",
+	log.Printf("    [%s] Size=%dx%d BS=%dx%d D1D2=%dx%d EC=%.2f TB=%d Algo=%s - E=%.1f%% D=%.1f%% T=%v%s\n",
 		status, params.ImageWidth, params.ImageHeight, params.BlockShapeW, params.BlockShapeH,
-		params.D1, params.D2, params.EmbedCount, params.TotalBlocks,
+		params.D1, params.D2, params.EmbedCount, params.TotalBlocks, params.Mark.algo.AlgoName,
 		encodedAccuracy, decodedAccuracy, duration, ssimStr)
 
 	return &TestResult{&params, encodedAccuracy, decodedAccuracy, success, ssim}
 }
 
 func (params TestParams) EmbeddedImagePath(embeddedDir string) string {
-	embeddedFilename := fmt.Sprintf("img%s_%dx%d_bs%dx%d_ds%dx%d.jpeg",
+	embeddedFilename := fmt.Sprintf("img%s_%dx%d_bs%dx%d_ds%dx%d_%s.jpeg",
 		params.ImageName,
 		params.ImageWidth, params.ImageHeight,
 		params.BlockShapeW, params.BlockShapeH,
-		params.D1, params.D2)
+		params.D1, params.D2,
+		params.Mark.algo.AlgoName,
+	)
 	return filepath.Join(embeddedDir, embeddedFilename)
 }
 
@@ -486,4 +359,26 @@ func getEmbedImage(path string) (io.Reader, error) {
 		return nil, fmt.Errorf("failed read file: %w", err)
 	}
 	return bytes.NewReader(data), nil
+}
+
+func calcAccuracy(want, got *mark.Mark64) (encodedAccuracy, decodedAccuracy float64, success bool) {
+	encodedMatches := 0
+	for i := range want.Len() {
+		if want.GetBit(i) == got.GetBit(i) {
+			encodedMatches++
+		}
+	}
+	encodedAccuracy = float64(encodedMatches) / float64(want.Len()) * 100
+
+	decodedWant := want.DecodeToBools()
+	decodedGot := got.DecodeToBools()
+	decodedMatches := 0
+	for i := range decodedWant {
+		if decodedWant[i] == decodedGot[i] {
+			decodedMatches++
+		}
+	}
+	decodedAccuracy = float64(decodedMatches) / float64(len(decodedWant)) * 100
+	success = decodedMatches == len(decodedWant)
+	return
 }

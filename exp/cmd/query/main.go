@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	dbPath := flag.String("db", "./tmp/optimize/jsons/optimize_results.db", "Path to database file")
+	dbPath := flag.String("db", "/tmp/optimize/db/optimize_results.db", "Path to database file")
 	queryType := flag.String("query", "stats", "Query type: stats, best-params, image-sizes, embed-counts, successful, raw")
 	minSSIM := flag.Float64("min-ssim", 0.95, "Minimum SSIM for successful results")
 	minSuccessRate := flag.Float64("min-success", 0.8, "Minimum success rate for best params")

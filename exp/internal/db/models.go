@@ -9,28 +9,23 @@ type (
 
 	// ImageSize represents resized dimensions
 	ImageSize struct {
-		ID      int64
-		ImageID int64
-		Width   int
-		Height  int
-		// Unique constraint on (ImageID, Width, Height)
+		ID     int64
+		Width  int
+		Height int
+		// Unique constraint on (Width, Height)
 	}
 
 	// Mark represents original watermark data
 	Mark struct {
 		ID   int64
 		Mark []byte // Use []byte for binary data
-		Size int    // Bit length
 	}
 
-	// ECCMark represents encoded watermark
-	ECCMark struct {
+	// MarkEccAlgo represents ECC algorithm (independent of mark data)
+	MarkEccAlgo struct {
 		ID       int64
-		MarkID   int64
-		Encoded  []byte // Use []byte for binary data
-		Size     int    // Bit length
 		AlgoName string
-		// Unique constraint on (MarkID, AlgoName)
+		// Unique constraint on (AlgoName)
 	}
 
 	// MarkParam represents watermarking parameters
@@ -45,14 +40,12 @@ type (
 
 	// Result represents test outcome
 	Result struct {
-		ID          int64
-		ImageSizeID int64
-		ECCMarkID   int64
-		MarkParamID int64
-
-		// Paths
-		OriginalImagePath string
-		EmbedImagePath    string
+		ID            int64
+		ImageID       int64
+		ImageSizeID   int64
+		MarkID        int64 // Added: reference to original mark
+		MarkEccAlgoID int64 // Changed from ECCMarkID
+		MarkParamID   int64
 
 		// Computed fields (can be calculated from relations)
 		EmbedCount  float64 // TotalBlocks / EncodedSize
@@ -64,6 +57,6 @@ type (
 		Success         bool
 		SSIM            float64
 
-		// Unique constraint on (ImageSizeID, ECCMarkID, MarkParamID)
+		// Unique constraint on (ImageID, ImageSizeID, MarkID, MarkEccAlgoID, MarkParamID)
 	}
 )

@@ -96,32 +96,10 @@ func main() {
 				}
 			}
 
-			// Get target embed low
-			fmt.Print("Target embed count lower bound (default: 1.0): ")
-			embedLowStr, _ := reader.ReadString('\n')
-			embedLowStr = strings.TrimSpace(embedLowStr)
-			targetEmbedLow := 1.0
-			if embedLowStr != "" {
-				if val, err := strconv.ParseFloat(embedLowStr, 64); err == nil {
-					targetEmbedLow = val
-				}
-			}
+			fmt.Printf("\nStarting with: numImages=%d, offset=%d\n\n",
+				numImages, offset)
 
-			// Get target embed high
-			fmt.Print("Target embed count upper bound (default: 6.0): ")
-			embedHighStr, _ := reader.ReadString('\n')
-			embedHighStr = strings.TrimSpace(embedHighStr)
-			targetEmbedHigh := 6.0
-			if embedHighStr != "" {
-				if val, err := strconv.ParseFloat(embedHighStr, 64); err == nil {
-					targetEmbedHigh = val
-				}
-			}
-
-			fmt.Printf("\nStarting with: numImages=%d, offset=%d, embedRange=%.1f-%.1f\n\n",
-				numImages, offset, targetEmbedLow, targetEmbedHigh)
-
-			runMain(numImages, offset, targetEmbedLow, targetEmbedHigh)
+			runMain(numImages, offset)
 		case "2":
 			fmt.Println("\n--- Visualizing Results ---")
 
