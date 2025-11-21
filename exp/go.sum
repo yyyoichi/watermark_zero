@@ -18,10 +18,10 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/yyyoichi/bitstream-go v0.1.2 h1:fk56o0b7uWHTUzOAx7ZGvKR15Nc1TCdfWkeFX0JaFNw=
-github.com/yyyoichi/bitstream-go v0.1.2/go.mod h1:+zUAKGaVVfsRij0wcg1OXOY83/nwlQ2dGSoJwVSDCuU=
-github.com/yyyoichi/golay v0.1.2 h1:tHQq+0cvtifcglmJFmFKGPZ/j5Uy9hjZ92zWsjaJyOg=
-github.com/yyyoichi/golay v0.1.2/go.mod h1:JMI7fZSrcxLFQVP/sWXss7reSzhOSi2uzWRXjFD07xw=
+github.com/yyyoichi/bitstream-go v0.2.1 h1:JwrvTYFgdNsgFuTG74aRmTnPKdlrSAH4KV7iD5yt4eU=
+github.com/yyyoichi/bitstream-go v0.2.1/go.mod h1:+zUAKGaVVfsRij0wcg1OXOY83/nwlQ2dGSoJwVSDCuU=
+github.com/yyyoichi/golay v0.2.1 h1:obaabscGlT82TIU0ECcscKUqAX5Cm+xCptQj9mawoR0=
+github.com/yyyoichi/golay v0.2.1/go.mod h1:G1Xw1Z307jxtcrPsxX2tlFQflFgt54o4e7tt0gOam4M=
 github.com/yyyoichi/httpcache-go v0.1.5 h1:upGO3VSR6lPjm07czawAeHBVddE/5mccu1btMWpq1Jg=
 github.com/yyyoichi/httpcache-go v0.1.5/go.mod h1:unlJDwv+dY637u9EtMjcOd8AQ1gho+a208+O8a4dDtI=
 golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b h1:M2rDM6z3Fhozi9O7NWsxAkg/yqS/lQJ6PmkyIV3YP+o=

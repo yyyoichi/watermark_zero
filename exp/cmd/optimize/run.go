@@ -26,13 +26,13 @@ import (
 var TEST_MARK = func() []bool {
 	w := bitstream.NewBitWriter[uint64](0, 0)
 	for i := range wzeromark.MarkLen / 8 {
-		w.U8(0, 8, uint8(i*2))
+		w.Write8(0, 8, uint8(i*2))
 	}
-	d, _ := w.Data()
+	d := w.Data()
 	r := bitstream.NewBitReader(d, 0, 0)
 	var data = make([]bool, wzeromark.MarkLen)
 	for i := range data {
-		data[i] = r.U8R(1, i) == 1
+		data[i] = r.Read8R(1, i) == 1
 	}
 	return data
 }()
