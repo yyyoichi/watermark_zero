@@ -36,12 +36,9 @@ func visualizeMain(outputDir string) {
 	// Use timestamp as base name
 	baseName := "db_results"
 
-	// 1. Scatter plot: EmbedCount vs Success Rate
-	scatterPath := filepath.Join(outputDir, fmt.Sprintf("scatter_embedcount_vs_success_%s.html", baseName))
-	if err := generateScatterPlot(results, scatterPath); err != nil {
-		log.Printf("Failed to generate scatter plot: %v\n", err)
-	} else {
-		log.Printf("Generated: %s\n", scatterPath)
+	// 1. EmbedCount vs Success Rate: Generate separate charts for each algorithm
+	if err := generateEmbedCountCharts(results, outputDir, baseName); err != nil {
+		log.Printf("Failed to generate embed count charts: %v\n", err)
 	}
 
 	// 2. Heatmap: D1 vs D2
@@ -63,92 +60,204 @@ func visualizeMain(outputDir string) {
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
 }
 
-// generateScatterPlot creates a scatter plot of EmbedCount vs Success Rate
-// Each point is colored by D1D2 and shaped by BlockShape
-func generateScatterPlot(results []*db.DetailedResult, outputPath string) error {
-	// Calculate embed count range from results
-	var minEmbed, maxEmbed float64 = 999999, 0
-	for _, r := range results {
-		if r.EmbedCount < minEmbed {
-			minEmbed = r.EmbedCount
-		}
-		if r.EmbedCount > maxEmbed {
-			maxEmbed = r.EmbedCount
-		}
+// generateEmbedCountCharts creates a chart showing success rates by D1D2 and EmbedCount thresholds
+func generateEmbedCountCharts(results []*db.DetailedResult, outputDir, baseName string) error {
+	chartPath := filepath.Join(outputDir, fmt.Sprintf("embedcount_by_d1d2_%s.html", baseName))
+	if err := generateEmbedCountByD1D2Chart(results, chartPath); err != nil {
+		log.Printf("Failed to generate embed count chart: %v\n", err)
+		return err
+	}
+	log.Printf("Generated: %s\n", chartPath)
+	return nil
+}
+
+// generateEmbedCountByD1D2Chart creates a line chart showing average success rates by D1D2
+// X-axis: D1D2 combinations
+// Y-axis: Success Rate (%)
+// Lines: Different algorithms with EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)
+func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath string) error {
+	type d1d2Key struct {
+		d1, d2 int
 	}
 
-	scatter := charts.NewScatter()
-	scatter.SetGlobalOptions(
+	// EmbedCount thresholds to analyze
+	thresholds := []float64{1, 4, 7, 8, 9, 10}
+
+	// Group results by algorithm, D1D2, and EmbedCount
+	// Map: algo -> d1d2 -> embedCount -> results
+	groupedResults := make(map[string]map[d1d2Key]map[float64][]*db.DetailedResult)
+	d1d2Set := make(map[d1d2Key]bool)
+	algoSet := make(map[string]bool)
+
+	for _, r := range results {
+		algoSet[r.ECCAlgo] = true
+		if groupedResults[r.ECCAlgo] == nil {
+			groupedResults[r.ECCAlgo] = make(map[d1d2Key]map[float64][]*db.DetailedResult)
+		}
+		key := d1d2Key{r.D1, r.D2}
+		d1d2Set[key] = true
+
+		if groupedResults[r.ECCAlgo][key] == nil {
+			groupedResults[r.ECCAlgo][key] = make(map[float64][]*db.DetailedResult)
+		}
+		groupedResults[r.ECCAlgo][key][r.EmbedCount] = append(groupedResults[r.ECCAlgo][key][r.EmbedCount], r)
+	}
+
+	// Sort D1D2 keys
+	var sortedD1D2 []d1d2Key
+	for k := range d1d2Set {
+		sortedD1D2 = append(sortedD1D2, k)
+	}
+	sort.Slice(sortedD1D2, func(i, j int) bool {
+		if sortedD1D2[i].d1 != sortedD1D2[j].d1 {
+			return sortedD1D2[i].d1 < sortedD1D2[j].d1
+		}
+		return sortedD1D2[i].d2 < sortedD1D2[j].d2
+	})
+
+	// Sort algorithms
+	var sortedAlgos []string
+	for algo := range algoSet {
+		sortedAlgos = append(sortedAlgos, algo)
+	}
+	sort.Strings(sortedAlgos)
+
+	// Build X-axis labels: show D1×D2 format
+	var xLabels []string
+	for _, key := range sortedD1D2 {
+		xLabels = append(xLabels, fmt.Sprintf("%d×%d", key.d1, key.d2))
+	}
+
+	// Create line chart
+	line := charts.NewLine()
+	line.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{
+			Title:    "Average Success Rate by D1D2 and EmbedCount Thresholds",
+			Subtitle: "Success rates for each algorithm at different EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)",
+		}),
 		charts.WithXAxisOpts(opts.XAxis{
-			Name: "EmbedCount",
-			Type: "value",
-			Min:  minEmbed,
-			Max:  maxEmbed,
+			Name: "D1 × D2",
+			Type: "category",
+			Data: xLabels,
 		}),
 		charts.WithYAxisOpts(opts.YAxis{
-			Name:         "Success Rate (%)",
-			NameLocation: "start",
-			Type:         "value",
-			Min:          60,
-			Max:          100,
+			Name: "Success Rate (%)",
+			Type: "value",
+			Min:  0,
+			Max:  100,
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
-			Show:     opts.Bool(true),
-			Trigger:  "item",
-			Position: "bottom",
+			Show:    opts.Bool(true),
+			Trigger: "axis",
+		}),
+		charts.WithLegendOpts(opts.Legend{
+			Show: opts.Bool(true),
+			Top:  "5%",
 		}),
 		charts.WithDataZoomOpts(opts.DataZoom{
-			Type:   "slider",
-			Start:  0,
-			End:    100,
-			Orient: "vertical",
-		}),
-		charts.WithDataZoomOpts(opts.DataZoom{
-			Type:   "slider",
-			Start:  0,
-			End:    100,
-			Orient: "horizontal",
+			Type:  "slider",
+			Start: 0,
+			End:   100,
 		}),
 	)
 
-	resultsByD12EC := make(map[string]map[string][]*db.DetailedResult)
-	for _, r := range results {
-		d1d2Key := fmt.Sprintf("D1=%d,D2=%d", r.D1, r.D2)
-		ec := fmt.Sprintf("%.1f", r.EmbedCount)
-		if _, exists := resultsByD12EC[d1d2Key]; !exists {
-			resultsByD12EC[d1d2Key] = make(map[string][]*db.DetailedResult)
-		}
-		resultsByD12EC[d1d2Key][ec] = append(resultsByD12EC[d1d2Key][ec], r)
+	// Color palette for different algorithms
+	algoColors := map[string]string{
+		"RS":     "#1f77b4", // blue
+		"BCH":    "#ff7f0e", // orange
+		"LDPC":   "#2ca02c", // green
+		"Turbo":  "#d62728", // red
+		"Polar":  "#9467bd", // purple
+		"Repeat": "#8c564b", // brown
 	}
 
-	// Group by D1D2 for series
-	d1d2Groups := make(map[string][]opts.ScatterData)
-	for d1d2Key, r := range resultsByD12EC {
-		for ec, rs := range r {
-			var decodedAccuracies float64
-			for _, res := range rs {
-				decodedAccuracies += res.DecodedAccuracy
+	// Line styles for different thresholds
+	thresholdStyles := map[float64]string{
+		1:  "solid",
+		4:  "dashed",
+		7:  "dotted",
+		8:  "solid",
+		9:  "dashed",
+		10: "dotted",
+	}
+
+	// Print statistics header
+	fmt.Println("\n=== Average Success Rate by D1D2 and EmbedCount Thresholds ===")
+	fmt.Println("Algorithm\tThreshold\tD1D2\t\tSamples\tSuccess%")
+	fmt.Println("---------\t---------\t----\t\t-------\t--------")
+
+	// Set X-axis with labels
+	line.SetXAxis(xLabels)
+
+	// Add series for each algorithm-threshold combination
+	for _, algo := range sortedAlgos {
+		for _, threshold := range thresholds {
+			var lineData []opts.LineData
+
+			for _, d1d2 := range sortedD1D2 {
+				// Calculate average success rate for EmbedCount >= threshold
+				var totalSuccess, totalCount int
+
+				if ecMap, exists := groupedResults[algo][d1d2]; exists {
+					for ec, rs := range ecMap {
+						if ec >= threshold {
+							for _, r := range rs {
+								totalCount++
+								if r.Success {
+									totalSuccess++
+								}
+							}
+						}
+					}
+				}
+
+				successRate := 0.0
+				if totalCount > 0 {
+					successRate = float64(totalSuccess) / float64(totalCount) * 100
+				}
+
+				lineData = append(lineData, opts.LineData{
+					Value: successRate,
+					Name:  fmt.Sprintf("%s EC>=%.0f D1=%d,D2=%d (n=%d)", algo, threshold, d1d2.d1, d1d2.d2, totalCount),
+				})
+
+				// Print statistics
+				if totalCount > 0 {
+					fmt.Printf("%s\t\t>=%.0f\t\tD1=%d,D2=%d\t%d\t%.1f%%\n",
+						algo, threshold, d1d2.d1, d1d2.d2, totalCount, successRate)
+				}
 			}
-			decodedAccuracy := decodedAccuracies / float64(len(rs))
-			d1d2Groups[d1d2Key] = append(d1d2Groups[d1d2Key], opts.ScatterData{
-				Value:      []any{ec, decodedAccuracy},
-				Symbol:     "circle",
-				SymbolSize: 10,
-				Name:       fmt.Sprintf("%s,EC=%s,Sample=%d", d1d2Key, ec, len(rs)),
-			})
+
+			// Get color for algorithm
+			color, ok := algoColors[algo]
+			if !ok {
+				color = "#808080" // gray for unknown
+			}
+
+			// Get line style for threshold
+			lineStyle, ok := thresholdStyles[threshold]
+			if !ok {
+				lineStyle = "solid"
+			}
+
+			// Add series
+			seriesName := fmt.Sprintf("%s (EC>=%.0f)", algo, threshold)
+			line.AddSeries(seriesName, lineData,
+				charts.WithLineChartOpts(opts.LineChart{
+					Smooth: opts.Bool(true),
+				}),
+				charts.WithLineStyleOpts(opts.LineStyle{
+					Color: color,
+					Width: 2,
+					Type:  lineStyle,
+				}),
+				charts.WithItemStyleOpts(opts.ItemStyle{
+					Color: color,
+				}),
+			)
 		}
 	}
-
-	// Sort keys for consistent legend order
-	var d1d2Keys []string
-	for k := range d1d2Groups {
-		d1d2Keys = append(d1d2Keys, k)
-	}
-	sort.Strings(d1d2Keys)
-
-	for _, key := range d1d2Keys {
-		scatter.AddSeries(key, d1d2Groups[key])
-	}
+	fmt.Println()
 
 	f, err := os.Create(outputPath)
 	if err != nil {
@@ -156,44 +265,7 @@ func generateScatterPlot(results []*db.DetailedResult, outputPath string) error 
 	}
 	defer f.Close()
 
-	// Print resultsByD12EC table
-	log.Printf("\n=== Results by D1D2 and EmbedCount ===\n")
-
-	// Print header
-	log.Printf("%-15s | %6s | %8s | %8s | %8s\n", "D1D2", "EC", "Samples", "AvgAcc%", "Success%")
-	log.Printf("%s\n", "----------------+--------+----------+----------+----------")
-
-	for _, d1d2Key := range d1d2Keys {
-		ecMap := resultsByD12EC[d1d2Key]
-
-		// Sort EC keys in descending order
-		var ecKeys []string
-		for ec := range ecMap {
-			ecKeys = append(ecKeys, ec)
-		}
-		sort.Strings(ecKeys)
-
-		// Print each EC
-		for _, ec := range ecKeys {
-			rs := ecMap[ec]
-			var totalAcc float64
-			var successCount int
-			for _, r := range rs {
-				totalAcc += r.DecodedAccuracy
-				if r.Success {
-					successCount++
-				}
-			}
-			avgAcc := totalAcc / float64(len(rs))
-			successRate := float64(successCount) / float64(len(rs)) * 100
-
-			log.Printf("%-15s | %6s | %8d | %7.1f%% | %7.1f%%\n",
-				d1d2Key, ec, len(rs), avgAcc, successRate)
-		}
-	}
-	log.Printf("\n")
-
-	return scatter.Render(f)
+	return line.Render(f)
 }
 
 // generateHeatmap creates a heatmap of D1 vs D2 with success rate as intensity
