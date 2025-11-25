@@ -13,8 +13,8 @@ import (
 )
 
 func visualizeMain(outputDir string) {
-	// Read detailed results from database using the view
-	results, err := database.QueryDetailed("SELECT * FROM results_view")
+	// Read detailed results from database using the view, excluding PNG files
+	results, err := database.QueryDetailed("SELECT * FROM results_view WHERE image_uri NOT LIKE '%.png'")
 	if err != nil {
 		log.Fatalf("Failed to load results from database: %v", err)
 	}
