@@ -36,46 +36,38 @@ func visualizeMain(outputDir string) {
 	// Use timestamp as base name
 	baseName := "db_results"
 
-	// 1. EmbedCount vs Success Rate: Generate separate charts for each algorithm
-	if err := generateEmbedCountCharts(results, outputDir, baseName); err != nil {
-		log.Printf("Failed to generate embed count charts: %v\n", err)
+	// 1. Success rate comparison by parameters (D1D2, EmbedCount thresholds, algorithms)
+	chartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_%s.html", baseName))
+	if err := generateSuccessRateByParamsChart(results, chartPath); err != nil {
+		log.Printf("Failed to generate success rate comparison chart: %v\n", err)
+	} else {
+		log.Printf("Generated: %s\n", chartPath)
 	}
 
-	// 2. Heatmap: D1 vs D2
-	heatmapPath := filepath.Join(outputDir, fmt.Sprintf("heatmap_d1d2_%s.html", baseName))
-	if err := generateHeatmap(results, heatmapPath); err != nil {
-		log.Printf("Failed to generate heatmap: %v\n", err)
+	// 2. D1D2 success rate heatmap
+	heatmapPath := filepath.Join(outputDir, fmt.Sprintf("heatmap_d1d2_success_rate_%s.html", baseName))
+	if err := generateD1D2SuccessRateHeatmap(results, heatmapPath); err != nil {
+		log.Printf("Failed to generate D1D2 success rate heatmap: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", heatmapPath)
 	}
 
-	// 3. Quality chart: SSIM vs Success Rate by D1D2
-	qualityPath := filepath.Join(outputDir, fmt.Sprintf("quality_ssim_vs_success_%s.html", baseName))
-	if err := generateQualityChart(results, qualityPath); err != nil {
-		log.Printf("Failed to generate quality chart: %v\n", err)
+	// 3. SSIM comparison by parameters (BlockSize, D1D2)
+	ssimPath := filepath.Join(outputDir, fmt.Sprintf("ssim_by_params_%s.html", baseName))
+	if err := generateSSIMByParamsChart(results, ssimPath); err != nil {
+		log.Printf("Failed to generate SSIM comparison chart: %v\n", err)
 	} else {
-		log.Printf("Generated: %s\n", qualityPath)
+		log.Printf("Generated: %s\n", ssimPath)
 	}
 
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
 }
 
-// generateEmbedCountCharts creates a chart showing success rates by D1D2 and EmbedCount thresholds
-func generateEmbedCountCharts(results []*db.DetailedResult, outputDir, baseName string) error {
-	chartPath := filepath.Join(outputDir, fmt.Sprintf("embedcount_by_d1d2_%s.html", baseName))
-	if err := generateEmbedCountByD1D2Chart(results, chartPath); err != nil {
-		log.Printf("Failed to generate embed count chart: %v\n", err)
-		return err
-	}
-	log.Printf("Generated: %s\n", chartPath)
-	return nil
-}
-
-// generateEmbedCountByD1D2Chart creates a line chart showing average success rates by D1D2
+// generateSuccessRateByParamsChart creates a line chart comparing success rates across parameters
 // X-axis: D1D2 combinations
 // Y-axis: Success Rate (%)
-// Lines: Different algorithms with EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)
-func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath string) error {
+// Lines: Different algorithms with EmbedCount thresholds (>=1, >=4, >=8, >=10, >=12, >=14, >=15)
+func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath string) error {
 	type d1d2Key struct {
 		d1, d2 int
 	}
@@ -132,8 +124,8 @@ func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath stri
 	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title: "Average Success Rate by D1D2 and EmbedCount Thresholds",
-			// Subtitle: "Success rates for each algorithm at different EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)",
+			Title:    "Success Rate Comparison by Parameters",
+			Subtitle: "Comparing success rates across D1D2, EmbedCount thresholds, and algorithms",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "D1 × D2",
@@ -274,8 +266,8 @@ func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath stri
 	return line.Render(f)
 }
 
-// generateHeatmap creates a heatmap of D1 vs D2 with success rate as intensity
-func generateHeatmap(results []*db.DetailedResult, outputPath string) error {
+// generateD1D2SuccessRateHeatmap creates a heatmap showing success rate for each D1×D2 combination
+func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath string) error {
 	// Aggregate success rate by D1D2
 	type d1d2Key struct {
 		d1, d2 int
@@ -341,8 +333,8 @@ func generateHeatmap(results []*db.DetailedResult, outputPath string) error {
 	heatmap := charts.NewHeatMap()
 	heatmap.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "D1 vs D2 Success Rate Heatmap",
-			Subtitle: "Success rate (%) for each D1D2 combination",
+			Title:    "D1×D2 Success Rate Heatmap",
+			Subtitle: "Overall success rate (%) for each D1×D2 parameter combination",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name:      "D1",
@@ -381,10 +373,10 @@ func generateHeatmap(results []*db.DetailedResult, outputPath string) error {
 	return heatmap.Render(f)
 }
 
-// generateQualityChart creates a chart showing SSIM distribution by BlockSize and D1D2
-// X-axis: BlockSize (as categorical), grouped by D1D2 parameters
-// Y-axis: SSIM values
-func generateQualityChart(results []*db.DetailedResult, outputPath string) error {
+// generateSSIMByParamsChart creates a chart comparing SSIM values across parameters
+// X-axis: BlockSize×D1D2 combinations
+// Y-axis: SSIM values (median and average)
+func generateSSIMByParamsChart(results []*db.DetailedResult, outputPath string) error {
 	// Group results by BlockSize and D1D2
 	type blockSizeKey struct {
 		h, w int
@@ -452,8 +444,8 @@ func generateQualityChart(results []*db.DetailedResult, outputPath string) error
 	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "SSIM Distribution by BlockSize and D1D2",
-			Subtitle: "Median and Average SSIM for each BlockSize×D1D2 combination",
+			Title:    "SSIM Comparison by Parameters",
+			Subtitle: "Comparing SSIM values (median and average) across BlockSize×D1D2 combinations",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "BlockSize × D1D2",
