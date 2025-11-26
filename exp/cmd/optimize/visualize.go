@@ -267,8 +267,9 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 }
 
 // generateD1D2SuccessRateHeatmap creates a heatmap showing success rate for each D1×D2 combination
+// Filters to only include S-Golay algorithm results
 func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath string) error {
-	// Aggregate success rate by D1D2
+	// Aggregate success rate by D1D2 (S-Golay only)
 	type d1d2Key struct {
 		d1, d2 int
 	}
@@ -278,6 +279,10 @@ func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath str
 	})
 
 	for _, r := range results {
+		// Filter to only S-Golay algorithm, 8x8 block size, and EmbedCount >= 8
+		if r.ECCAlgo != EccAlgoShuffledGolay || r.BlockShapeH != 8 || r.BlockShapeW != 8 || r.EmbedCount < 12 {
+			continue
+		}
 		key := d1d2Key{r.D1, r.D2}
 		stats := d1d2Stats[key]
 		stats.total++
@@ -333,8 +338,8 @@ func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath str
 	heatmap := charts.NewHeatMap()
 	heatmap.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "D1×D2 Success Rate Heatmap",
-			Subtitle: "Overall success rate (%) for each D1×D2 parameter combination",
+			Title:    "D1×D2 Success Rate Heatmap (S-Golay, 8×8 Block, EC≥12)",
+			Subtitle: "Success rate (%) for each D1×D2 parameter combination (S-Golay, 8×8 block, EmbedCount≥8)",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name:      "D1",
@@ -354,9 +359,9 @@ func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath str
 		}),
 		charts.WithVisualMapOpts(opts.VisualMap{
 			Calculable: opts.Bool(true),
-			Min:        0,
+			Min:        70,
 			Max:        100,
-			Range:      []float32{0, 100},
+			Range:      []float32{70, 100},
 			InRange:    &opts.VisualMapInRange{Color: []string{"#313695", "#74add1", "#fee090", "#f46d43", "#a50026"}},
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{Show: opts.Bool(true)}),
