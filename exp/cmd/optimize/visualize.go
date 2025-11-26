@@ -132,8 +132,8 @@ func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath stri
 	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "Average Success Rate by D1D2 and EmbedCount Thresholds",
-			Subtitle: "Success rates for each algorithm at different EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)",
+			Title: "Average Success Rate by D1D2 and EmbedCount Thresholds",
+			// Subtitle: "Success rates for each algorithm at different EmbedCount thresholds (>=1, >=4, >=7, >=8, >=9, >=10)",
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "D1 × D2",
@@ -158,6 +158,12 @@ func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath stri
 			Type:  "slider",
 			Start: 0,
 			End:   100,
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:   "slider",
+			Orient: "vertical",
+			Start:  0,
+			End:    100,
 		}),
 	)
 
