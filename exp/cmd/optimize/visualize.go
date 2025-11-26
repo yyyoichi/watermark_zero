@@ -38,10 +38,21 @@ func visualizeMain(outputDir string) {
 
 	// 1. Success rate comparison by parameters (D1D2, EmbedCount thresholds, algorithms)
 	chartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_%s.html", baseName))
-	if err := generateSuccessRateByParamsChart(results, chartPath); err != nil {
+	if err := generateSuccessRateByParamsChart(results, chartPath, nil, "Success Rate Comparison by Parameters"); err != nil {
 		log.Printf("Failed to generate success rate comparison chart: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", chartPath)
+	}
+
+	// 1-2. Success rate comparison by parameters (S-Golay, 8x8 block only)
+	sgolayChartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_sgolay_8x8_%s.html", baseName))
+	sgolayFilter := func(r *db.DetailedResult) bool {
+		return r.ECCAlgo == EccAlgoShuffledGolay && r.BlockShapeH == 8 && r.BlockShapeW == 8
+	}
+	if err := generateSuccessRateByParamsChart(results, sgolayChartPath, sgolayFilter, "Success Rate Comparison (S-Golay, 8×8 Block)"); err != nil {
+		log.Printf("Failed to generate S-Golay 8x8 success rate comparison chart: %v\n", err)
+	} else {
+		log.Printf("Generated: %s\n", sgolayChartPath)
 	}
 
 	// 2. D1D2 success rate heatmap
@@ -67,7 +78,9 @@ func visualizeMain(outputDir string) {
 // X-axis: D1D2 combinations
 // Y-axis: Success Rate (%)
 // Lines: Different algorithms with EmbedCount thresholds (>=1, >=4, >=8, >=10, >=12, >=14, >=15)
-func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath string) error {
+// filterFunc: optional filter function to limit results (nil means no filter)
+// title: chart title
+func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath string, filterFunc func(*db.DetailedResult) bool, title string) error {
 	type d1d2Key struct {
 		d1, d2 int
 	}
@@ -82,6 +95,11 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	algoSet := make(map[string]bool)
 
 	for _, r := range results {
+		// Apply filter if provided
+		if filterFunc != nil && !filterFunc(r) {
+			continue
+		}
+
 		algoSet[r.ECCAlgo] = true
 		if groupedResults[r.ECCAlgo] == nil {
 			groupedResults[r.ECCAlgo] = make(map[d1d2Key]map[float64][]*db.DetailedResult)
@@ -124,8 +142,7 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
-			Title:    "Success Rate Comparison by Parameters",
-			Subtitle: "Comparing success rates across D1D2, EmbedCount thresholds, and algorithms",
+			Title: title,
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			Name: "D1 × D2",
@@ -180,7 +197,7 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	}
 
 	// Print statistics header
-	fmt.Println("\n=== Average Success Rate by D1D2 and EmbedCount Thresholds ===")
+	fmt.Printf("\n=== %s ===\n", title)
 	fmt.Println("Algorithm\tThreshold\tD1D2\t\tSamples\tSuccess%")
 	fmt.Println("---------\t---------\t----\t\t-------\t--------")
 
