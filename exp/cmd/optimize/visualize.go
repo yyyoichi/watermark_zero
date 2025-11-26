@@ -81,7 +81,7 @@ func generateEmbedCountByD1D2Chart(results []*db.DetailedResult, outputPath stri
 	}
 
 	// EmbedCount thresholds to analyze
-	thresholds := []float64{1, 4, 7, 8, 9, 10}
+	thresholds := []float64{1, 4, 8, 10, 12, 14, 15}
 
 	// Group results by algorithm, D1D2, and EmbedCount
 	// Map: algo -> d1d2 -> embedCount -> results
