@@ -22,7 +22,7 @@ var (
 
 func init() {
 	// Initialize database
-	dbDir := filepath.Join("/tmp/optimize/db")
+	dbDir := filepath.Join("/tmp/optimize-db")
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		log.Fatalf("Failed to create database directory: %v", err)
