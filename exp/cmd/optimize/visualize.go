@@ -70,6 +70,23 @@ func visualizeMain(outputDir string) {
 		}
 	}
 
+	// 3. Combined Success Rate & SSIM by EmbedCount (S-Golay, 8x8, D1=21, 7<=D2<=11)
+	combinedECPath := filepath.Join(outputDir, fmt.Sprintf("combined_successrate_ssim_by_embedcount_%s.html", baseName))
+	combinedECQuery := fmt.Sprintf(
+		"SELECT * FROM results_view WHERE image_uri NOT LIKE '%%.png' AND embed_count < 31 AND ecc_algo = '%s' AND block_shape_h = 8 AND block_shape_w = 8 AND d1 = 21 AND d2 >= 7 AND d2 <= 11",
+		EccAlgoShuffledGolay,
+	)
+	combinedECResults, err := database.QueryDetailed(combinedECQuery)
+	if err != nil {
+		log.Printf("Failed to load filtered results for combined EC chart: %v\n", err)
+	} else {
+		if err := generateCombinedSuccessSSIMByEmbedCountChart(combinedECResults, combinedECPath, "Success Rate & SSIM by EmbedCount (S-Golay, 8×8, D1=21, 7≤D2≤11)"); err != nil {
+			log.Printf("Failed to generate combined success rate & SSIM by EmbedCount chart: %v\n", err)
+		} else {
+			log.Printf("Generated: %s\n", combinedECPath)
+		}
+	}
+
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
 }
 
@@ -279,6 +296,214 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 // generateD1D2SuccessRateHeatmap creates a heatmap showing success rate for each D1×D2 combination
 // Filters to only include S-Golay algorithm results
 // (removed) generateD1D2SuccessRateHeatmap was deleted per request
+
+// generateCombinedSuccessSSIMByEmbedCountChart creates a dual Y-axis line chart
+// X-axis: EmbedCount (integer, floored)
+// Left Y-axis: Success Rate (%)
+// Right Y-axis: SSIM
+// Lines: Different D1D2 parameter combinations
+// Each line shows the average success rate and SSIM for that specific EmbedCount value (not cumulative)
+func generateCombinedSuccessSSIMByEmbedCountChart(results []*db.DetailedResult, outputPath string, title string) error {
+	type d1d2Key struct {
+		d1, d2 int
+	}
+
+	// Group results by D1D2 and EmbedCount (floored)
+	// Map: d1d2 -> embedCount (int) -> results
+	groupedResults := make(map[d1d2Key]map[int][]*db.DetailedResult)
+	d1d2Set := make(map[d1d2Key]bool)
+	embedCountSet := make(map[int]bool)
+
+	for _, r := range results {
+		key := d1d2Key{r.D1, r.D2}
+		d1d2Set[key] = true
+		ec := int(r.EmbedCount) // floor to int
+		embedCountSet[ec] = true
+
+		if groupedResults[key] == nil {
+			groupedResults[key] = make(map[int][]*db.DetailedResult)
+		}
+		groupedResults[key][ec] = append(groupedResults[key][ec], r)
+	}
+
+	// Sort D1D2 keys
+	var sortedD1D2 []d1d2Key
+	for k := range d1d2Set {
+		sortedD1D2 = append(sortedD1D2, k)
+	}
+	sort.Slice(sortedD1D2, func(i, j int) bool {
+		if sortedD1D2[i].d1 != sortedD1D2[j].d1 {
+			return sortedD1D2[i].d1 < sortedD1D2[j].d1
+		}
+		return sortedD1D2[i].d2 < sortedD1D2[j].d2
+	})
+
+	// Sort EmbedCount keys
+	var sortedEC []int
+	for ec := range embedCountSet {
+		sortedEC = append(sortedEC, ec)
+	}
+	sort.Ints(sortedEC)
+
+	// Build X-axis labels: EmbedCount values
+	var xLabels []string
+	for _, ec := range sortedEC {
+		xLabels = append(xLabels, fmt.Sprintf("%d", ec))
+	}
+
+	// Create line chart
+	line := charts.NewLine()
+	line.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{
+			Title: title,
+		}),
+		charts.WithXAxisOpts(opts.XAxis{
+			Name: "EmbedCount",
+			Type: "category",
+		}),
+		charts.WithYAxisOpts(opts.YAxis{
+			Name: "Success Rate (%)",
+			Type: "value",
+			Min:  0,
+			Max:  100,
+		}),
+		charts.WithTooltipOpts(opts.Tooltip{
+			Show:    opts.Bool(true),
+			Trigger: "axis",
+		}),
+		charts.WithLegendOpts(opts.Legend{
+			Show: opts.Bool(true),
+			Top:  "5%",
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:  "slider",
+			Start: 0,
+			End:   100,
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:   "slider",
+			Orient: "vertical",
+			Start:  0,
+			End:    100,
+		}),
+	)
+
+	// Extend YAxis for dual axis (SSIM on the right)
+	line.ExtendYAxis(opts.YAxis{
+		Name: "SSIM",
+		Type: "value",
+		Min:  0.8,
+		Max:  1.0,
+	})
+
+	// Color palette for different D1D2 combinations
+	colors := []string{"#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"}
+
+	// Print statistics header
+	fmt.Printf("\n=== %s ===\n", title)
+	fmt.Println("D1D2\t\tEC\tSamples\tSuccess%%\tSSIM")
+	fmt.Println("----\t\t--\t-------\t--------\t----")
+
+	// Set X-axis with labels
+	line.SetXAxis(xLabels)
+
+	// Add series for each D1D2 combination
+	for idx, d1d2 := range sortedD1D2 {
+		var successData []opts.LineData
+		var ssimData []opts.LineData
+
+		for _, ec := range sortedEC {
+			// Calculate average success rate and SSIM for this specific EmbedCount
+			var totalSuccess, totalCount int
+			var totalSSIM float64
+			var ssimCount int
+
+			if ecResults, exists := groupedResults[d1d2][ec]; exists {
+				for _, r := range ecResults {
+					totalCount++
+					if r.Success {
+						totalSuccess++
+					}
+					if r.SSIM > 0 {
+						totalSSIM += r.SSIM
+						ssimCount++
+					}
+				}
+			}
+
+			successRate := 0.0
+			if totalCount > 0 {
+				successRate = float64(totalSuccess) / float64(totalCount) * 100
+			}
+
+			avgSSIM := 0.0
+			if ssimCount > 0 {
+				avgSSIM = totalSSIM / float64(ssimCount)
+			}
+
+			successData = append(successData, opts.LineData{
+				Value: successRate,
+				Name:  fmt.Sprintf("D1=%d,D2=%d EC=%d Success: %.1f%% (n=%d)", d1d2.d1, d1d2.d2, ec, successRate, totalCount),
+			})
+
+			ssimData = append(ssimData, opts.LineData{
+				Value: avgSSIM,
+				Name:  fmt.Sprintf("D1=%d,D2=%d EC=%d SSIM: %.4f (n=%d)", d1d2.d1, d1d2.d2, ec, avgSSIM, ssimCount),
+			})
+
+			// Print statistics
+			if totalCount > 0 {
+				fmt.Printf("D1=%d,D2=%d\t%d\t%d\t%.1f%%\t\t%.4f\n",
+					d1d2.d1, d1d2.d2, ec, totalCount, successRate, avgSSIM)
+			}
+		}
+
+		// Get color for this D1D2
+		color := colors[idx%len(colors)]
+
+		// Add success rate series (left Y-axis)
+		seriesName := fmt.Sprintf("Success Rate (D1=%d,D2=%d)", d1d2.d1, d1d2.d2)
+		line.AddSeries(seriesName, successData,
+			charts.WithLineChartOpts(opts.LineChart{
+				Smooth:     opts.Bool(true),
+				YAxisIndex: 0,
+			}),
+			charts.WithLineStyleOpts(opts.LineStyle{
+				Color: color,
+				Width: 2,
+			}),
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color: color,
+			}),
+		)
+
+		// Add SSIM series (right Y-axis) with dashed line
+		ssimSeriesName := fmt.Sprintf("SSIM (D1=%d,D2=%d)", d1d2.d1, d1d2.d2)
+		line.AddSeries(ssimSeriesName, ssimData,
+			charts.WithLineChartOpts(opts.LineChart{
+				Smooth:     opts.Bool(true),
+				YAxisIndex: 1,
+			}),
+			charts.WithLineStyleOpts(opts.LineStyle{
+				Color: color,
+				Width: 2,
+				Type:  "dashed",
+			}),
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color: color,
+			}),
+		)
+	}
+	fmt.Println()
+
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return line.Render(f)
+}
 
 // generateSSIMByParamsChart creates a chart comparing SSIM values across parameters
 // X-axis: BlockSize×D1D2 combinations
