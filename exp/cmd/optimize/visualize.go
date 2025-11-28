@@ -85,6 +85,9 @@ func visualizeMain(outputDir string) {
 		} else {
 			log.Printf("Generated: %s\n", combinedECPath)
 		}
+
+		// List images with high failure rates
+		printFailureProneImages(combinedECResults)
 	}
 
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
@@ -291,6 +294,57 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	defer f.Close()
 
 	return line.Render(f)
+}
+
+// printFailureProneImages lists images with their failure counts
+func printFailureProneImages(results []*db.DetailedResult) {
+	// Group by image URI and count failures
+	type imageStats struct {
+		uri          string
+		totalTests   int
+		failureCount int
+	}
+
+	imageMap := make(map[string]*imageStats)
+
+	for _, r := range results {
+		if imageMap[r.ImageURI] == nil {
+			imageMap[r.ImageURI] = &imageStats{
+				uri: r.ImageURI,
+			}
+		}
+		stats := imageMap[r.ImageURI]
+		stats.totalTests++
+		if !r.Success {
+			stats.failureCount++
+		}
+	}
+
+	// Sort by failure rate (descending)
+	var statsList []*imageStats
+	for _, stats := range imageMap {
+		statsList = append(statsList, stats)
+	}
+	sort.Slice(statsList, func(i, j int) bool {
+		rateI := float64(statsList[i].failureCount) / float64(statsList[i].totalTests)
+		rateJ := float64(statsList[j].failureCount) / float64(statsList[j].totalTests)
+		if rateI != rateJ {
+			return rateI > rateJ
+		}
+		return statsList[i].failureCount > statsList[j].failureCount
+	})
+
+	// Print results
+	fmt.Println("\n=== Failure-Prone Images (S-Golay, 8×8, D1=21, 7≤D2≤11) ===")
+	fmt.Println("Image URI\t\t\t\t\t\tTests\tFailures\tFailure Rate")
+	fmt.Println("---------\t\t\t\t\t\t-----\t--------\t------------")
+
+	for _, stats := range statsList {
+		failureRate := float64(stats.failureCount) / float64(stats.totalTests) * 100
+		fmt.Printf("%s\t%d\t%d\t\t%.1f%%\n",
+			stats.uri, stats.totalTests, stats.failureCount, failureRate)
+	}
+	fmt.Println()
 }
 
 // generateD1D2SuccessRateHeatmap creates a heatmap showing success rate for each D1×D2 combination
