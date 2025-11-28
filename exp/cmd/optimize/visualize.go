@@ -56,13 +56,7 @@ func visualizeMain(outputDir string) {
 		log.Printf("Generated: %s\n", sgolayChartPath)
 	}
 
-	// 2. D1D2 success rate heatmap
-	heatmapPath := filepath.Join(outputDir, fmt.Sprintf("heatmap_d1d2_success_rate_%s.html", baseName))
-	if err := generateD1D2SuccessRateHeatmap(results, heatmapPath); err != nil {
-		log.Printf("Failed to generate D1D2 success rate heatmap: %v\n", err)
-	} else {
-		log.Printf("Generated: %s\n", heatmapPath)
-	}
+	// (removed) D1D2 success rate heatmap
 
 	// 3. SSIM comparison by parameters (BlockSize, D1D2)
 	ssimPath := filepath.Join(outputDir, fmt.Sprintf("ssim_by_params_%s.html", baseName))
@@ -286,115 +280,7 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 
 // generateD1D2SuccessRateHeatmap creates a heatmap showing success rate for each D1×D2 combination
 // Filters to only include S-Golay algorithm results
-func generateD1D2SuccessRateHeatmap(results []*db.DetailedResult, outputPath string) error {
-	// Aggregate success rate by D1D2 (S-Golay only)
-	type d1d2Key struct {
-		d1, d2 int
-	}
-	d1d2Stats := make(map[d1d2Key]struct {
-		total   int
-		success int
-	})
-
-	for _, r := range results {
-		// Filter to only S-Golay algorithm, 8x8 block size, and EmbedCount >= 8
-		if r.ECCAlgo != EccAlgoShuffledGolay || r.BlockShapeH != 8 || r.BlockShapeW != 8 || r.EmbedCount < 12 {
-			continue
-		}
-		key := d1d2Key{r.D1, r.D2}
-		stats := d1d2Stats[key]
-		stats.total++
-		if r.Success {
-			stats.success++
-		}
-		d1d2Stats[key] = stats
-	}
-
-	// Extract unique D1 and D2 values
-	d1Set := make(map[int]bool)
-	d2Set := make(map[int]bool)
-	for key := range d1d2Stats {
-		d1Set[key.d1] = true
-		d2Set[key.d2] = true
-	}
-
-	var d1List, d2List []int
-	for d1 := range d1Set {
-		d1List = append(d1List, d1)
-	}
-	for d2 := range d2Set {
-		d2List = append(d2List, d2)
-	}
-	sort.Ints(d1List)
-	sort.Ints(d2List)
-
-	// Convert D1 and D2 to string labels
-	var xLabels, yLabels []string
-	for _, d1 := range d1List {
-		xLabels = append(xLabels, fmt.Sprintf("D1=%d", d1))
-	}
-	for _, d2 := range d2List {
-		yLabels = append(yLabels, fmt.Sprintf("D2=%d", d2))
-	}
-
-	// Build heatmap data
-	var heatmapData []opts.HeatMapData
-	for i, d2 := range d2List {
-		for j, d1 := range d1List {
-			key := d1d2Key{d1, d2}
-			stats := d1d2Stats[key]
-			successRate := 0.0
-			if stats.total > 0 {
-				successRate = float64(stats.success) / float64(stats.total) * 100
-			}
-			heatmapData = append(heatmapData, opts.HeatMapData{
-				Value: [3]any{j, i, successRate},
-			})
-		}
-	}
-
-	heatmap := charts.NewHeatMap()
-	heatmap.SetGlobalOptions(
-		charts.WithTitleOpts(opts.Title{
-			Title:    "D1×D2 Success Rate Heatmap (S-Golay, 8×8 Block, EC≥12)",
-			Subtitle: "Success rate (%) for each D1×D2 parameter combination (S-Golay, 8×8 block, EmbedCount≥8)",
-		}),
-		charts.WithXAxisOpts(opts.XAxis{
-			Name:      "D1",
-			Type:      "category",
-			Data:      xLabels,
-			SplitArea: &opts.SplitArea{Show: opts.Bool(true)},
-		}),
-		charts.WithYAxisOpts(opts.YAxis{
-			Name:      "D2",
-			Type:      "category",
-			Data:      yLabels,
-			SplitArea: &opts.SplitArea{Show: opts.Bool(true)},
-		}),
-		charts.WithLegendOpts(opts.Legend{
-			Show: opts.Bool(true),
-			Top:  "10%",
-		}),
-		charts.WithVisualMapOpts(opts.VisualMap{
-			Calculable: opts.Bool(true),
-			Min:        70,
-			Max:        100,
-			Range:      []float32{70, 100},
-			InRange:    &opts.VisualMapInRange{Color: []string{"#313695", "#74add1", "#fee090", "#f46d43", "#a50026"}},
-		}),
-		charts.WithTooltipOpts(opts.Tooltip{Show: opts.Bool(true)}),
-	)
-
-	heatmap.AddSeries("Success Rate", heatmapData)
-
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return heatmap.Render(f)
-}
+// (removed) generateD1D2SuccessRateHeatmap was deleted per request
 
 // generateSSIMByParamsChart creates a chart comparing SSIM values across parameters
 // X-axis: BlockSize×D1D2 combinations
