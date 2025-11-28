@@ -133,7 +133,7 @@ func (b *Batch) Embed(ctx context.Context, mark EmbedMark, opts ...Option) (imag
 }
 
 // Extract extracts a bit sequence from the cached image with specified options.
-func (b *Batch) Extract(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
+func (b *Batch) Extract(ctx context.Context, markLen int, opts ...Option) ([]byte, error) {
 	w, _ := New(opts...)
 	img := b.original.Copy()
 	if err := watermark.Enable(img, markLen, w.blockShape); err != nil {

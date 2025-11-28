@@ -48,12 +48,12 @@ func ExampleNewBools() {
 	// ExtractSize equals len(bools)
 	fmt.Printf("Extract size: %d bits (= %d bools)\n", mark.ExtractSize(), len(bools))
 
-	// Decode back to bools
-	decoded := mark.DecodeToBools()
-	fmt.Println(decoded)
+	// Decode back to bytes (bools are packed into bytes)
+	decoded := mark.DecodeToBytes()
+	fmt.Printf("%08b\n", decoded[0])
 	// Output:
 	// Extract size: 4 bits (= 4 bools)
-	// [true false true true]
+	// 10110000
 }
 
 // ExampleNewExtract demonstrates how to extract and decode a watermark.
@@ -63,9 +63,12 @@ func ExampleNewExtract() {
 	size := embedMark.ExtractSize()
 
 	// Simulate extracting bits (in real scenario, these come from the watermarked image)
-	extractedBits := make([]bool, embedMark.Len())
+	// Each byte represents a single bit (0 or 1)
+	extractedBits := make([]byte, embedMark.Len())
 	for i := range extractedBits {
-		extractedBits[i] = embedMark.GetBit(i) > 0
+		if embedMark.GetBit(i) > 0 {
+			extractedBits[i] = 1
+		}
 	}
 
 	// Create an extract interface for decoding

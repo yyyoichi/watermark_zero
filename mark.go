@@ -21,7 +21,8 @@ type EmbedMark interface {
 // It provides methods to initialize a decoder from extracted bit sequences.
 type ExtractMark interface {
 	// NewDecoder receives the extracted bit sequence and initializes a MarkDecoder.
-	NewDecoder([]bool) MarkDecoder
+	// Each byte in the slice represents a single bit (0 or 1).
+	NewDecoder([]byte) MarkDecoder
 	MarkCore
 }
 
@@ -32,6 +33,4 @@ type MarkDecoder interface {
 	DecodeToBytes() []byte
 	// DecodeToString decodes the watermark data and returns it as a string.
 	DecodeToString() string
-	// DecodeToBools decodes the watermark data and returns it as a boolean slice.
-	DecodeToBools() []bool
 }

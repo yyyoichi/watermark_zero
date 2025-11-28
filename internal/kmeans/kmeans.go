@@ -11,10 +11,10 @@ import "math"
 // to the mean of assigned points. It continues until convergence when centers stabilize
 // within tolerance.
 //
-// The returned slice contains classification results where true indicates the high
-// cluster and false indicates the low cluster.
-func OneDimKmeans(averages []float64) []bool {
-	var isClass01 []bool
+// The returned byte slice contains classification results where 1 indicates the high
+// cluster and 0 indicates the low cluster.
+func OneDimKmeans(averages []float64) []byte {
+	var isClass01 []byte
 	var center = func() [2]float64 {
 		var min, max float64 = averages[0], averages[0]
 		for _, v := range averages {
@@ -29,12 +29,12 @@ func OneDimKmeans(averages []float64) []bool {
 	}()
 	etol := math.Pow10(-6)
 	for range 300 {
-		isClass01 = make([]bool, len(averages))
+		isClass01 = make([]byte, len(averages))
 		threshold := (center[0] + center[1]) / 2.
 		var higts, lows AverageStore
 		for i, avr := range averages {
 			if threshold <= avr {
-				isClass01[i] = true
+				isClass01[i] = 1
 				higts.Add(avr)
 			} else {
 				lows.Add(avr)

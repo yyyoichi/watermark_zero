@@ -103,7 +103,7 @@ func Embed(ctx context.Context, src ImageSource, mark EmbedMark, shape BlockShap
 	return src.build(), nil
 }
 
-func Extract(ctx context.Context, src ImageSource, markLen int, shape BlockShape, d1 int, d2 int, wavelets []*dwt.Wavelets, dctCache *dct.Cache) ([]bool, error) {
+func Extract(ctx context.Context, src ImageSource, markLen int, shape BlockShape, d1 int, d2 int, wavelets []*dwt.Wavelets, dctCache *dct.Cache) ([]byte, error) {
 	var (
 		totalBlocks = shape.TotalBlocks(src)
 		blockArea   = shape.blockArea()

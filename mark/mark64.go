@@ -84,11 +84,12 @@ func (m *Mark64) ExtractSize() int {
 }
 
 // NewDecoder receives the extracted bit sequence from the watermark and initializes a MarkDecoder.
+// Each byte in the bits slice represents a single bit (0 or 1).
 // This is typically used internally and rarely needs to be called directly by users.
-func (m *Mark64) NewDecoder(bits []bool) watermark.MarkDecoder {
+func (m *Mark64) NewDecoder(bits []byte) watermark.MarkDecoder {
 	w := bitstream.NewBitWriter[uint64](0, 0)
 	for _, v := range bits {
-		w.WriteBool(v)
+		w.WriteBool(v != 0)
 	}
 	reader := bitstream.NewBitReader(w.Data(), 0, 0)
 	reader.SetBits(m.mf.f.encodedLen(m.size))
@@ -113,16 +114,4 @@ func (m *Mark64) DecodeToBytes() []byte {
 // It internally calls DecodeToBytes and converts the result to a string.
 func (m *Mark64) DecodeToString() string {
 	return string(m.DecodeToBytes())
-}
-
-// DecodeToBools decodes the extracted watermark data and returns it as a boolean slice.
-// Each element represents a single bit of the original mark.
-func (m *Mark64) DecodeToBools() []bool {
-	r := m.mf.f.decode(m.reader.Data(), m.size)
-	_ = r.Seek(0)
-	var decoded = make([]bool, m.size)
-	for i := range decoded {
-		decoded[i], _ = r.ReadBit()
-	}
-	return decoded
 }

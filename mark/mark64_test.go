@@ -43,11 +43,6 @@ func TestMark64EncodeDecode(t *testing.T) {
 			},
 			func(t *testing.T, m watermark.MarkDecoder) {
 				assert.Equal(t, []byte{0x01, 0xff, 0x00}, m.DecodeToBytes())
-				assert.Equal(t, []bool{
-					false, false, false, false, false, false, false, true,
-					true, true, true, true, true, true, true, true,
-					false, false, false, false, false, false, false, false,
-				}, m.DecodeToBools())
 			},
 		},
 		{"bytes_2",
@@ -63,7 +58,6 @@ func TestMark64EncodeDecode(t *testing.T) {
 				return NewBools([]bool{true}, o...)
 			},
 			func(t *testing.T, m watermark.MarkDecoder) {
-				assert.Equal(t, []bool{true}, m.DecodeToBools())
 				assert.Equal(t, []byte{0b10_000_000}, m.DecodeToBytes())
 			},
 		},
@@ -72,7 +66,6 @@ func TestMark64EncodeDecode(t *testing.T) {
 				return NewBools([]bool{false}, o...)
 			},
 			func(t *testing.T, m watermark.MarkDecoder) {
-				assert.Equal(t, []bool{false}, m.DecodeToBools())
 				assert.Equal(t, []byte{0}, m.DecodeToBytes())
 			},
 		},
@@ -85,11 +78,6 @@ func TestMark64EncodeDecode(t *testing.T) {
 				}, o...)
 			},
 			func(t *testing.T, m watermark.MarkDecoder) {
-				assert.Equal(t, []bool{
-					false, true, false, true,
-					false, false, true, true,
-					false, false, false, true, true, true,
-				}, m.DecodeToBools())
 				assert.Equal(t, []byte{0b01_010_011, 0b00_011_100}, m.DecodeToBytes())
 			},
 		},
@@ -121,7 +109,6 @@ func TestMark64EncodeDecode(t *testing.T) {
 	noPanicDecodes := func(t *testing.T, mark watermark.MarkDecoder) {
 		assert.NotPanics(t, func() { mark.DecodeToString() })
 		assert.NotPanics(t, func() { mark.DecodeToBytes() })
-		assert.NotPanics(t, func() { mark.DecodeToBools() })
 	}
 	for _, tt := range test {
 		t.Run(tt.name, func(t *testing.T) {
@@ -136,9 +123,11 @@ func TestMark64EncodeDecode(t *testing.T) {
 				assert.NotPanics(t, func() { mark.NewDecoder(nil) })
 				tt.assert(t, mark)
 
-				var data = make([]bool, mark.Len())
+				var data = make([]byte, mark.Len())
 				for i := range data {
-					data[i] = mark.GetBit(i) > 0
+					if mark.GetBit(i) > 0 {
+						data[i] = 1
+					}
 				}
 				dec := mark.NewDecoder(data)
 				noPanicDecodes(t, dec)
