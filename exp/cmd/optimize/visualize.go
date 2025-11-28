@@ -13,8 +13,9 @@ import (
 )
 
 func visualizeMain(outputDir string) {
-	// Read detailed results from database using the view, excluding PNG files
-	results, err := database.QueryDetailed("SELECT * FROM results_view WHERE image_uri NOT LIKE '%.png'")
+	// Read detailed results from database using the view
+	// Exclude PNG files and filter to EmbedCount < 16
+	results, err := database.QueryDetailed("SELECT * FROM results_view WHERE image_uri NOT LIKE '%.png' AND embed_count < 16")
 	if err != nil {
 		log.Fatalf("Failed to load results from database: %v", err)
 	}
