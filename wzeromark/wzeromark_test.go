@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yyyoichi/watermark_zero/internal/bitconv"
 )
 
 type keyGenMock struct {
@@ -59,14 +58,14 @@ func TestWZeroMark(t *testing.T) {
 		test := []struct {
 			name      string
 			src       string
-			mark      []bool
+			mark      []byte
 			hash      *string
 			timestamp *time.Time
 			nonce     *string
-			assert    func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string)
+			assert    func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string)
 		}{
 			{name: "basic", src: "data",
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
 					assert.Zero(t, mark)
 					assert.Nil(t, hash)
 					assert.Nil(t, timestamp)
@@ -74,17 +73,17 @@ func TestWZeroMark(t *testing.T) {
 				},
 			},
 			{name: "mark", src: "data",
-				mark: make([]bool, MarkLen),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
-					assert.Len(t, mark, MarkLen)
+				mark: make([]byte, MarkSize/8),
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
+					assert.Len(t, mark, MarkSize/8)
 					assert.Nil(t, hash)
 					assert.Nil(t, timestamp)
 					assert.Nil(t, nonce)
 				},
 			},
 			{name: "empty mark", src: "data",
-				mark: make([]bool, 0),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
+				mark: make([]byte, 0),
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
 					assert.Len(t, mark, 0)
 					assert.Nil(t, hash)
 					assert.Nil(t, timestamp)
@@ -93,7 +92,7 @@ func TestWZeroMark(t *testing.T) {
 			},
 			{name: "hash", src: "data",
 				hash: new(string),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
 					assert.Zero(t, mark)
 					assert.NotNil(t, hash)
 					assert.Len(t, *hash, 8*2)
@@ -103,7 +102,7 @@ func TestWZeroMark(t *testing.T) {
 			},
 			{name: "timestamp", src: "data",
 				timestamp: new(time.Time),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
 					assert.Zero(t, mark)
 					assert.Nil(t, hash)
 					assert.NotNil(t, timestamp)
@@ -113,7 +112,7 @@ func TestWZeroMark(t *testing.T) {
 			},
 			{name: "nonce", src: "data",
 				nonce: new(string),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
 					assert.Zero(t, mark)
 					assert.Nil(t, hash)
 					assert.Nil(t, timestamp)
@@ -122,12 +121,12 @@ func TestWZeroMark(t *testing.T) {
 				},
 			},
 			{name: "full", src: "data",
-				mark:      make([]bool, MarkLen),
+				mark:      make([]byte, MarkSize/8),
 				hash:      new(string),
 				timestamp: new(time.Time),
 				nonce:     new(string),
-				assert: func(t *testing.T, mark []bool, hash *string, timestamp *time.Time, nonce *string) {
-					assert.Len(t, mark, MarkLen)
+				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
+					assert.Len(t, mark, MarkSize/8)
 					assert.NotNil(t, hash)
 					assert.Len(t, *hash, 8*2)
 					assert.NotNil(t, timestamp)
@@ -159,7 +158,7 @@ func TestWZeroMark(t *testing.T) {
 		}
 		var (
 			src           = "data"
-			testmark      = make([]bool, MarkLen)
+			testmark      = make([]byte, MarkSize/8)
 			testhash      string
 			testtimestamp time.Time
 			testnonce     string
@@ -169,7 +168,7 @@ func TestWZeroMark(t *testing.T) {
 
 		test := []struct {
 			name      string
-			mark      []bool
+			mark      []byte
 			hash      *string
 			timestamp *time.Time
 			nonce     *string
@@ -245,61 +244,58 @@ func TestWZeroMark(t *testing.T) {
 		}
 		test := []struct {
 			name   string
-			edit   func(t *testing.T, mark *[]bool)
+			edit   func(t *testing.T, mark *[]byte)
 			expErr error
 		}{
 			{name: "invalid length",
-				edit: func(t *testing.T, mark *[]bool) {
-					*mark = (*mark)[:MarkLen-1]
+				edit: func(t *testing.T, mark *[]byte) {
+					*mark = (*mark)[:MarkSize/8-1]
 				},
 				expErr: ErrInvalidMarkLength,
 			},
 			{name: "invalid version",
-				edit: func(t *testing.T, mark *[]bool) {
-					payload := bitconv.BoolsToBytes(*mark)
-					payload[0] = 0xff
+				edit: func(t *testing.T, mark *[]byte) {
+					(*mark)[0] = 0xff
 					// Re sign with invalid signature
 					edKeySeed, err := m.ed25519KeyGen.Generate(timestamp)
 					require.NoError(t, err)
 					priv := ed25519.NewKeyFromSeed(edKeySeed)
-					sig, err := priv.Sign(nil, payload[:19], &ed25519.Options{
+					sig, err := priv.Sign(nil, (*mark)[:19], &ed25519.Options{
 						Context: context,
 					})
 					require.NoError(t, err)
-					copy(payload[19:], sig)
-					*mark = bitconv.BytesToBools(payload)
+					copy((*mark)[19:], sig)
 				},
 				expErr: ErrInvalidVersion,
 			},
 			{
 				name: "invalid org code",
-				edit: func(t *testing.T, mark *[]bool) {
-					payload := bitconv.BoolsToBytes(*mark)
-					payload[9] = 0xff
+				edit: func(t *testing.T, mark *[]byte) {
+					(*mark)[9] = 0xff
 					// Re sign with invalid signature
 					edKeySeed, err := m.ed25519KeyGen.Generate(timestamp)
 					require.NoError(t, err)
 					priv := ed25519.NewKeyFromSeed(edKeySeed)
-					sig, err := priv.Sign(nil, payload[:19], &ed25519.Options{
+					sig, err := priv.Sign(nil, (*mark)[:19], &ed25519.Options{
 						Context: context,
 					})
 					require.NoError(t, err)
-					copy(payload[19:], sig)
-					*mark = bitconv.BytesToBools(payload)
+					copy((*mark)[19:], sig)
 				},
 				expErr: ErrInvalidOrgCode,
 			},
 			{
 				name: "invalid signature",
-				edit: func(t *testing.T, mark *[]bool) {
-					(*mark)[MarkLen-1] = !(*mark)[MarkLen-1]
+				edit: func(t *testing.T, mark *[]byte) {
+					// Flip last bit of the last byte
+					(*mark)[MarkSize/8-1] ^= 0x01
 				},
 				expErr: ErrInvalidSignature,
 			},
 		}
 		for _, tt := range test {
 			t.Run(tt.name, func(t *testing.T) {
-				mark := make([]bool, MarkLen)
+				mark := make([]byte, MarkSize/8)
 				err := m.encode("data", mark, nil, nil, nil)
 				require.NoError(t, err)
 
