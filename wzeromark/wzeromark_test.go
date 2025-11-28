@@ -73,9 +73,9 @@ func TestWZeroMark(t *testing.T) {
 				},
 			},
 			{name: "mark", src: "data",
-				mark: make([]byte, MarkSize/8),
+				mark: make([]byte, markByteLen),
 				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
-					assert.Len(t, mark, MarkSize/8)
+					assert.Len(t, mark, markByteLen)
 					assert.Nil(t, hash)
 					assert.Nil(t, timestamp)
 					assert.Nil(t, nonce)
@@ -121,12 +121,12 @@ func TestWZeroMark(t *testing.T) {
 				},
 			},
 			{name: "full", src: "data",
-				mark:      make([]byte, MarkSize/8),
+				mark:      make([]byte, markByteLen),
 				hash:      new(string),
 				timestamp: new(time.Time),
 				nonce:     new(string),
 				assert: func(t *testing.T, mark []byte, hash *string, timestamp *time.Time, nonce *string) {
-					assert.Len(t, mark, MarkSize/8)
+					assert.Len(t, mark, markByteLen)
 					assert.NotNil(t, hash)
 					assert.Len(t, *hash, 8*2)
 					assert.NotNil(t, timestamp)
@@ -158,7 +158,7 @@ func TestWZeroMark(t *testing.T) {
 		}
 		var (
 			src           = "data"
-			testmark      = make([]byte, MarkSize/8)
+			testmark      = make([]byte, markByteLen)
 			testhash      string
 			testtimestamp time.Time
 			testnonce     string
@@ -249,7 +249,7 @@ func TestWZeroMark(t *testing.T) {
 		}{
 			{name: "invalid length",
 				edit: func(t *testing.T, mark *[]byte) {
-					*mark = (*mark)[:MarkSize/8-1]
+					*mark = (*mark)[:markByteLen-1]
 				},
 				expErr: ErrInvalidMarkLength,
 			},
@@ -288,14 +288,14 @@ func TestWZeroMark(t *testing.T) {
 				name: "invalid signature",
 				edit: func(t *testing.T, mark *[]byte) {
 					// Flip last bit of the last byte
-					(*mark)[MarkSize/8-1] ^= 0x01
+					(*mark)[markByteLen-1] ^= 0x01
 				},
 				expErr: ErrInvalidSignature,
 			},
 		}
 		for _, tt := range test {
 			t.Run(tt.name, func(t *testing.T) {
-				mark := make([]byte, MarkSize/8)
+				mark := make([]byte, markByteLen)
 				err := m.encode("data", mark, nil, nil, nil)
 				require.NoError(t, err)
 

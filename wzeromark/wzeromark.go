@@ -16,6 +16,7 @@ import (
 const (
 	// MarkSize is the length of the watermark, in bits
 	MarkSize        = 83 * 8
+	markByteLen     = 83
 	version1        = 1
 	context  string = "watermark_zero/v1"
 )
@@ -56,7 +57,7 @@ func New(orgMasterKey, systemSolt []byte, orgCode string) (*WZeroMark, error) {
 // Encode converts the input string into a watermark byte slice.
 // Only the watermark bytes are returned; hash, timestamp, and nonce are not exposed.
 func (m *WZeroMark) Encode(src string) (mark []byte, err error) {
-	mark = make([]byte, MarkSize/8)
+	mark = make([]byte, markByteLen)
 	err = m.encode(src, mark, nil, nil, nil)
 	return
 }
@@ -64,7 +65,7 @@ func (m *WZeroMark) Encode(src string) (mark []byte, err error) {
 // FullEncode converts the input string into a watermark byte slice,
 // and also returns the hash (hex), timestamp, and nonce used in the watermark.
 func (m *WZeroMark) FullEncode(src string) (mark []byte, hash string, timestamp time.Time, nonce string, err error) {
-	mark = make([]byte, MarkSize/8)
+	mark = make([]byte, markByteLen)
 	err = m.encode(src, mark, &hash, &timestamp, &nonce)
 	return
 }
@@ -145,7 +146,7 @@ func (m *WZeroMark) encode(src string, mark []byte, hash *string, timestamp *tim
 	priv := ed25519.NewKeyFromSeed(edKeySeed)
 
 	// 3. Create Payload and Sign
-	payload := make([]byte, MarkSize/8)
+	payload := make([]byte, markByteLen)
 	payload[0] = version1
 	binary.BigEndian.PutUint64(payload[1:9], uint64(now.UnixMilli()<<16))
 	_, _ = rand.Read(payload[7:9])
@@ -160,7 +161,7 @@ func (m *WZeroMark) encode(src string, mark []byte, hash *string, timestamp *tim
 	}
 	copy(payload[19:], sig)
 
-	if len(mark)*8 == MarkSize {
+	if len(mark) == markByteLen {
 		copy(mark, payload)
 	}
 	if hash != nil {
@@ -191,8 +192,8 @@ func (m *WZeroMark) encodeSrc(keyClock time.Time, src string) ([]byte, string, e
 // decode is an internal method that returns the hash, timestamp, and nonce from the watermark byte slice.
 // Optionally returns these values.
 func (m *WZeroMark) decode(mark []byte, hash *string, timestamp *time.Time, nonce *string) error {
-	if len(mark)*8 != MarkSize {
-		return fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark)*8)
+	if len(mark) != markByteLen {
+		return fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
 	}
 
 	msec := int64(binary.BigEndian.Uint64(mark[1:9])) >> 16
