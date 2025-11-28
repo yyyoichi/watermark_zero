@@ -86,8 +86,8 @@ func visualizeMain(outputDir string) {
 			log.Printf("Generated: %s\n", combinedECPath)
 		}
 
-		// List images with high failure rates
-		printFailureProneImages(combinedECResults)
+		// Print per-image stats: success rate and SSIM (two sorted views)
+		printImageStatsLists(combinedECResults)
 	}
 
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
@@ -296,53 +296,104 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	return line.Render(f)
 }
 
-// printFailureProneImages lists images with their failure counts
-func printFailureProneImages(results []*db.DetailedResult) {
-	// Group by image URI and count failures
-	type imageStats struct {
-		uri          string
-		totalTests   int
-		failureCount int
+// (removed) printFailureProneImages and printLowSSIMImages were consolidated into printImageStatsLists
+
+// printImageStatsLists prints two lists using the same aggregated stats:
+// 1) failure-prone images (by failure rate desc), 2) low-SSIM images (by avg SSIM asc)
+func printImageStatsLists(results []*db.DetailedResult) {
+	type agg struct {
+		uri        string
+		total      int
+		failures   int
+		sumSSIM    float64
+		validSSIMs int
 	}
 
-	imageMap := make(map[string]*imageStats)
-
+	m := make(map[string]*agg)
 	for _, r := range results {
-		if imageMap[r.ImageURI] == nil {
-			imageMap[r.ImageURI] = &imageStats{
-				uri: r.ImageURI,
-			}
+		if m[r.ImageURI] == nil {
+			m[r.ImageURI] = &agg{uri: r.ImageURI}
 		}
-		stats := imageMap[r.ImageURI]
-		stats.totalTests++
+		a := m[r.ImageURI]
+		a.total++
 		if !r.Success {
-			stats.failureCount++
+			a.failures++
+		}
+		if r.SSIM > 0 {
+			a.sumSSIM += r.SSIM
+			a.validSSIMs++
 		}
 	}
 
-	// Sort by failure rate (descending)
-	var statsList []*imageStats
-	for _, stats := range imageMap {
-		statsList = append(statsList, stats)
+	var list []*agg
+	for _, a := range m {
+		list = append(list, a)
 	}
-	sort.Slice(statsList, func(i, j int) bool {
-		rateI := float64(statsList[i].failureCount) / float64(statsList[i].totalTests)
-		rateJ := float64(statsList[j].failureCount) / float64(statsList[j].totalTests)
+
+	// View 1: Failure-prone (failure rate desc)
+	sort.Slice(list, func(i, j int) bool {
+		rateI := 0.0
+		rateJ := 0.0
+		if list[i].total > 0 {
+			rateI = float64(list[i].failures) / float64(list[i].total)
+		}
+		if list[j].total > 0 {
+			rateJ = float64(list[j].failures) / float64(list[j].total)
+		}
 		if rateI != rateJ {
 			return rateI > rateJ
 		}
-		return statsList[i].failureCount > statsList[j].failureCount
+		return list[i].failures > list[j].failures
 	})
 
-	// Print results
-	fmt.Println("\n=== Failure-Prone Images (S-Golay, 8×8, D1=21, 7≤D2≤11) ===")
-	fmt.Println("Image URI\t\t\t\t\t\tTests\tFailures\tFailure Rate")
-	fmt.Println("---------\t\t\t\t\t\t-----\t--------\t------------")
+	fmt.Println("\n=== Failure-Prone Images (combined EC dataset) ===")
+	fmt.Println("Image URI\t\tTests\tSuccess%\tFailures\tFailure%\tValidSSIM\tAvg SSIM")
+	fmt.Println("---------\t\t-----\t--------\t--------\t---------\t---------\t--------")
+	for _, a := range list {
+		successPct := 0.0
+		failPct := 0.0
+		if a.total > 0 {
+			successPct = float64(a.total-a.failures) / float64(a.total) * 100
+			failPct = float64(a.failures) / float64(a.total) * 100
+		}
+		avg := 0.0
+		if a.validSSIMs > 0 {
+			avg = a.sumSSIM / float64(a.validSSIMs)
+		}
+		fmt.Printf("%s\t%d\t%.1f%%\t%d\t\t%.1f%%\t%d\t\t%.4f\n", a.uri, a.total, successPct, a.failures, failPct, a.validSSIMs, avg)
+	}
 
-	for _, stats := range statsList {
-		failureRate := float64(stats.failureCount) / float64(stats.totalTests) * 100
-		fmt.Printf("%s\t%d\t%d\t\t%.1f%%\n",
-			stats.uri, stats.totalTests, stats.failureCount, failureRate)
+	// View 2: Low-SSIM (avg SSIM asc)
+	sort.Slice(list, func(i, j int) bool {
+		avgI := 0.0
+		if list[i].validSSIMs > 0 {
+			avgI = list[i].sumSSIM / float64(list[i].validSSIMs)
+		}
+		avgJ := 0.0
+		if list[j].validSSIMs > 0 {
+			avgJ = list[j].sumSSIM / float64(list[j].validSSIMs)
+		}
+		if avgI != avgJ {
+			return avgI < avgJ
+		}
+		return list[i].total > list[j].total
+	})
+
+	fmt.Println("\n=== Low-SSIM Images (combined EC dataset) ===")
+	fmt.Println("Image URI\t\tTests\tSuccess%\tFailures\tFailure%\tValidSSIM\tAvg SSIM")
+	fmt.Println("---------\t\t-----\t--------\t--------\t---------\t---------\t--------")
+	for _, a := range list {
+		successPct := 0.0
+		failPct := 0.0
+		if a.total > 0 {
+			successPct = float64(a.total-a.failures) / float64(a.total) * 100
+			failPct = float64(a.failures) / float64(a.total) * 100
+		}
+		avg := 0.0
+		if a.validSSIMs > 0 {
+			avg = a.sumSSIM / float64(a.validSSIMs)
+		}
+		fmt.Printf("%s\t%d\t%.1f%%\t%d\t\t%.1f%%\t%d\t\t%.4f\n", a.uri, a.total, successPct, a.failures, failPct, a.validSSIMs, avg)
 	}
 	fmt.Println()
 }
