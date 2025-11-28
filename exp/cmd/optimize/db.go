@@ -52,8 +52,8 @@ func init() {
 		// Golay standard sizes
 		// wmarkzero: 664(83x8)bits -> Gloy (664+11)/12*23 = 1288bits
 		base := 1288
-		// embed count 1 ~ 15
-		count := 15
+		// embed count 1 ~ 30
+		count := 30
 		var defaultImageSizes = [][]int{}
 		// 8x8 block base size
 		for i := 1; i <= count; i++ {
