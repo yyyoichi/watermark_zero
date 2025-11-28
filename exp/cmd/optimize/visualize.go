@@ -37,33 +37,37 @@ func visualizeMain(outputDir string) {
 	// Use timestamp as base name
 	baseName := "db_results"
 
-	// 1. Success rate comparison by parameters (D1D2, EmbedCount thresholds, algorithms)
-	chartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_%s.html", baseName))
-	if err := generateSuccessRateByParamsChart(results, chartPath, nil, "Success Rate Comparison by Parameters"); err != nil {
-		log.Printf("Failed to generate success rate comparison chart: %v\n", err)
-	} else {
-		log.Printf("Generated: %s\n", chartPath)
-	}
-
-	// 1-2. Success rate comparison by parameters (S-Golay, 8x8 block only)
-	sgolayChartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_sgolay_8x8_%s.html", baseName))
-	sgolayFilter := func(r *db.DetailedResult) bool {
-		return r.ECCAlgo == EccAlgoShuffledGolay && r.BlockShapeH == 8 && r.BlockShapeW == 8
-	}
-	if err := generateSuccessRateByParamsChart(results, sgolayChartPath, sgolayFilter, "Success Rate Comparison (S-Golay, 8×8 Block)"); err != nil {
-		log.Printf("Failed to generate S-Golay 8x8 success rate comparison chart: %v\n", err)
-	} else {
-		log.Printf("Generated: %s\n", sgolayChartPath)
-	}
-
-	// (removed) D1D2 success rate heatmap
-
-	// 3. SSIM comparison by parameters (BlockSize, D1D2)
+	// 1. SSIM comparison by parameters (BlockSize, D1D2)
 	ssimPath := filepath.Join(outputDir, fmt.Sprintf("ssim_by_params_%s.html", baseName))
 	if err := generateSSIMByParamsChart(results, ssimPath); err != nil {
 		log.Printf("Failed to generate SSIM comparison chart: %v\n", err)
 	} else {
 		log.Printf("Generated: %s\n", ssimPath)
+	}
+
+	// 2. Success rate comparison by parameters (D1D2, EmbedCount thresholds, algorithms)
+	chartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_%s.html", baseName))
+	if err := generateSuccessRateByParamsChart(results, chartPath, "Success Rate Comparison by Parameters"); err != nil {
+		log.Printf("Failed to generate success rate comparison chart: %v\n", err)
+	} else {
+		log.Printf("Generated: %s\n", chartPath)
+	}
+
+	// 2-1. Success rate comparison by parameters (S-Golay, 8x8 block only)
+	sgolayChartPath := filepath.Join(outputDir, fmt.Sprintf("success_rate_by_params_sgolay_8x8_%s.html", baseName))
+	sgolayQuery := fmt.Sprintf(
+		"SELECT * FROM results_view WHERE image_uri NOT LIKE '%%.png' AND embed_count < 16 AND ecc_algo = '%s' AND block_shape_h = 8 AND block_shape_w = 8",
+		EccAlgoShuffledGolay,
+	)
+	sgolayResults, err := database.QueryDetailed(sgolayQuery)
+	if err != nil {
+		log.Printf("Failed to load filtered S-Golay 8x8 results: %v\n", err)
+	} else {
+		if err := generateSuccessRateByParamsChart(sgolayResults, sgolayChartPath, "Success Rate Comparison (S-Golay, 8×8 Block)"); err != nil {
+			log.Printf("Failed to generate S-Golay 8x8 success rate comparison chart: %v\n", err)
+		} else {
+			log.Printf("Generated: %s\n", sgolayChartPath)
+		}
 	}
 
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
@@ -73,9 +77,8 @@ func visualizeMain(outputDir string) {
 // X-axis: D1D2 combinations
 // Y-axis: Success Rate (%)
 // Lines: Different algorithms with EmbedCount thresholds (>=1, >=4, >=8, >=10, >=12, >=14, >=15)
-// filterFunc: optional filter function to limit results (nil means no filter)
 // title: chart title
-func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath string, filterFunc func(*db.DetailedResult) bool, title string) error {
+func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath string, title string) error {
 	type d1d2Key struct {
 		d1, d2 int
 	}
@@ -90,11 +93,6 @@ func generateSuccessRateByParamsChart(results []*db.DetailedResult, outputPath s
 	algoSet := make(map[string]bool)
 
 	for _, r := range results {
-		// Apply filter if provided
-		if filterFunc != nil && !filterFunc(r) {
-			continue
-		}
-
 		algoSet[r.ECCAlgo] = true
 		if groupedResults[r.ECCAlgo] == nil {
 			groupedResults[r.ECCAlgo] = make(map[d1d2Key]map[float64][]*db.DetailedResult)
