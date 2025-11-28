@@ -86,8 +86,17 @@ func visualizeMain(outputDir string) {
 			log.Printf("Generated: %s\n", combinedECPath)
 		}
 
-		// Print per-image stats: success rate and SSIM (two sorted views)
-		printImageStatsLists(combinedECResults)
+		// Print per-image stats for D1=21, D2=9 only
+		statsQuery := fmt.Sprintf(
+			"SELECT * FROM results_view WHERE image_uri NOT LIKE '%%.png' AND embed_count < 31 AND ecc_algo = '%s' AND block_shape_h = 8 AND block_shape_w = 8 AND d1 = 21 AND d2 = 9",
+			EccAlgoShuffledGolay,
+		)
+		statsResults, err := database.QueryDetailed(statsQuery)
+		if err != nil {
+			log.Printf("Failed to load filtered results for image stats (D1=21, D2=9): %v\n", err)
+		} else {
+			printImageStatsLists(statsResults)
+		}
 	}
 
 	log.Printf("\nAll visualizations saved to: %s\n", outputDir)
