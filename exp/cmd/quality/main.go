@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"image/jpeg"
@@ -14,9 +13,10 @@ import (
 	"exp/internal/images"
 	markpkg "exp/internal/mark"
 
+	"github.com/yyyoichi/bitstream-go"
 	watermark "github.com/yyyoichi/watermark_zero"
 	"github.com/yyyoichi/watermark_zero/mark"
-	"github.com/yyyoichi/watermark_zero/strmark/wzeromark"
+	"github.com/yyyoichi/watermark_zero/wzeromark"
 )
 
 // (image URLs are embedded and parsed inside the images package)
@@ -133,15 +133,23 @@ func main() {
 		urls = urls[:*numImages]
 	}
 
-	seed := make([]byte, 32)
-	_, _ = rand.Read(seed)
-	m, err := wzeromark.New(seed, seed, "1a2b")
-	if err != nil {
-		log.Fatalf("Failed to create watermark: %v", err)
-	}
-	testMark, err := m.Encode("TEST_MARK")
-	if err != nil {
-		log.Fatalf("Failed to encode test mark: %v", err)
+	var testMark []bool
+	{
+		seed := make([]byte, 32)
+		_ = seed // deterministic empty seed is OK for experiments; user can change
+		m, err := wzeromark.New(seed, seed, "1a2b")
+		if err != nil {
+			log.Fatalf("failed to create watermark: %v", err)
+		}
+		markbytes, err := m.Encode("TEST_MARK")
+		if err != nil {
+			log.Fatalf("failed to encode test mark: %v", err)
+		}
+		r := bitstream.NewBitReader(markbytes, 0, 0)
+		testMark = make([]bool, len(markbytes)*8)
+		for i := range testMark {
+			testMark[i], _ = r.ReadBit()
+		}
 	}
 	marks := []markpkg.Mark{
 		markpkg.NewNormalMark(testMark),
