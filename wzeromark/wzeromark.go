@@ -15,10 +15,10 @@ import (
 
 const (
 	// MarkSize is the length of the watermark, in bits
-	MarkSize        = 83 * 8
-	markByteLen     = 83
-	version1        = 1
-	context  string = "watermark_zero/v1"
+	MarkSize           = 83 * 8
+	markByteLen        = 83
+	version1    uint8  = 0b10_000_000
+	context     string = "watermark_zero/v1"
 )
 
 var (
