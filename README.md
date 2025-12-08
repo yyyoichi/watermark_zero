@@ -26,6 +26,39 @@ func main() {
 
 ```
 
+## `WithoutECC` vs `WithGolay`
+
+This section provides a comparison and explanation of mark encoding methods.
+
+`WithoutECC` uses traditional byte arrays converted directly into bit sequences for embedding.
+For example, `a` would be converted as: `0x61` -> `0b01100001`
+
+`WithGolay` utilizes Golay code (23,12) with error correction capability. Golay code is an error-correcting code that encodes 12 bits of data into 23 bits, enabling correction of up to 3-bit errors.
+For example, when a 12-bit sequence is Golay-encoded, it becomes a 23-bit sequence.
+
+In conclusion, **we strongly recommend using `WithGolay`**.
+
+### Characteristics in Digital Watermarking
+
+In digital watermark extraction, success is only achieved when all bits of the bit sequence are correctly extracted.
+In other words, if even 1 bit is incorrect, the entire process is considered a failure. For example, if you embed 100 bits and correctly extract 50 bits, 1 bit, or even 99 bits, anything less than 100 bits is considered a complete failure.
+
+With `WithoutECC`, since not even a single bit can be incorrect, *the extraction success rate is likely to be lower*.
+
+With `WithGolay`, although nearly twice the amount of information is embedded, error correction allows for tolerance of some errors while still achieving success, meaning *it is expected to increase the extraction success rate*.
+
+### Comparison
+
+![sgolay-vs-noecc](./docs/images/compare-sgolay.png)
+
+#### Reference: Golay Encoding Package
+
+https://pkg.go.dev/github.com/yyyoichi/golay
+
+```
+go get github.com/yyyoichi/golay
+```
+
 ## Benchmark
 
 ```txt
