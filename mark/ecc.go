@@ -7,7 +7,7 @@ import (
 	"github.com/yyyoichi/golay"
 )
 
-var _ factroy = (*shuffledgolay)(nil)
+var _ factory = (*shuffledgolay)(nil)
 
 type shuffledgolay int64
 
@@ -76,7 +76,7 @@ func (sg shuffledgolay) generatePermutation(length int) []int {
 	return index
 }
 
-var _ factroy = (*withoutecc)(nil)
+var _ factory = (*withoutecc)(nil)
 
 type withoutecc struct{}
 
