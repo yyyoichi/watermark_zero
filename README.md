@@ -5,6 +5,11 @@ The High-Efficiency Go Implementation of guofei9987/blind_watermark
 > This Go language implementation draws inspiration from the ideas and approach of [guofei9987/blind_watermark](https://github.com/guofei9987/blind_watermark) regarding the fundamental signal processing logic for digital watermarks.
 > The source of the base logic is the MIT License, and its copyright notice and license terms are included in the THIRD_PARTY_LICENSES.txt file within this repository.
 
+## Key Features
+
+- **Golay Error Correction**: Unlike the original implementation, this library incorporates Golay code (23,12) for robust error correction, significantly improving watermark extraction success rates
+- **Default Parameters (21×9)**: Optimized block size providing stable extraction even with low embedding counts, while minimizing visible noise in low-frequency regions (e.g., blue skies)
+- **High-Performance SVD**: Utilizes [gonum](https://github.com/gonum/gonum) for efficient Singular Value Decomposition operations
 
 ## Install
 
@@ -25,6 +30,54 @@ func main() {
 }
 
 ```
+
+## `WithoutECC` vs `WithGolay`
+
+This section provides a comparison and explanation of mark encoding methods.
+
+`WithoutECC` uses traditional byte arrays converted directly into bit sequences for embedding.
+For example, `a` would be converted as: `0x61` -> `0b01100001`
+
+`WithGolay` utilizes Golay code (23,12) with error correction capability. Golay code is an error-correcting code that encodes 12 bits of data into 23 bits, enabling correction of up to 3-bit errors.
+For example, when a 12-bit sequence is Golay-encoded, it becomes a 23-bit sequence.
+
+In conclusion, **we strongly recommend using `WithGolay`**.
+
+### Characteristics in Digital Watermarking
+
+In digital watermark extraction, success is only achieved when all bits of the bit sequence are correctly extracted.
+In other words, if even 1 bit is incorrect, the entire process is considered a failure. For example, if you embed 100 bits and correctly extract 50 bits, 1 bit, or even 99 bits, anything less than 100 bits is considered a complete failure.
+
+With `WithoutECC`, since not even a single bit can be incorrect, *the extraction success rate is likely to be lower*.
+
+With `WithGolay`, although nearly twice the amount of information is embedded, error correction allows for tolerance of some errors while still achieving success, meaning *it is expected to increase the extraction success rate*.
+
+### Comparison
+
+![sgolay-vs-noecc](./docs/images/compare-sgolay.png)
+
+#### Reference: Golay Encoding Package
+
+https://pkg.go.dev/github.com/yyyoichi/golay
+
+```
+go get github.com/yyyoichi/golay
+```
+
+
+## Parameters and Noise Level
+
+Increasing the D1 and D2 parameters improves the extraction success rate, but image quality will degrade.
+Additionally, dividing the image into finer blocks increases the embedding capacity, but also increases noise.
+
+![ssim](./docs/images/ssim.png)
+
+![success-rate](./docs/images/success-rate.png)
+
+## Reference
+
+These examples are implemented in [./exp](./exp/).
+All experiments were conducted to investigate resistance to JPEG compression.
 
 ## Benchmark
 

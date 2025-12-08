@@ -93,8 +93,8 @@ func (w *Watermark) init(opts ...Option) error {
 		}
 	}
 	if w.d1 == 0 {
-		w.d1 = 36
-		w.d2 = 20
+		w.d1 = 21
+		w.d2 = 9
 	}
 	if w.blockShape.IsZero() {
 		w.blockShape = watermark.NewBlockShape(8, 8)
