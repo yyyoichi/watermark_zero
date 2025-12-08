@@ -13,9 +13,9 @@ type (
 	// It allows choosing whether to use error correction codes (ECC) and which type.
 	Option      func(*markFactory)
 	markFactory struct {
-		f factroy
+		f factory
 	}
-	factroy interface {
+	factory interface {
 		encode(data []uint64, markSize int) ([]uint64, int)
 		decode(data []uint64, size int) *bitstream.BitReader[uint64]
 		encodedLen(size int) int

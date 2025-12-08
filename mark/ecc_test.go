@@ -6,7 +6,7 @@ import (
 
 func TestShuffledGolay(t *testing.T) {
 	var sg shuffledgolay = 12345
-	t.Run("encode lenght", func(t *testing.T) {
+	t.Run("encode length", func(t *testing.T) {
 		for v := range 64 * 4 {
 			_, l := sg.encode([]uint64{1, 2, 3, 4}, v)
 			if l != sg.encodedLen(v) {
