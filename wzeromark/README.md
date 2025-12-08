@@ -8,10 +8,10 @@ W-ZeroAPI generates a **mark** from a source via an **irreversible transformatio
 
 | Name         | Length | Purpose                        | Details |
 | :--          | --:    | :--                            | :--     |
-| Version      | 1B     | Mark structure management      | Little-endian |
-| Org Code     | 2.5B   | Organization identification    | 20-bit, unique value per organization, usually 5-digit hex (~1.04 million) |
-| Nonce        | 1.5B   | Source identification          | 12-bit, random value (4,096 variations) |
+| Version      | 1B     | Mark structure management      |         |
 | Timestamp    | 6B     | Mark generation date/time      | Unix milliseconds |
+| Nonce        | 2B     | Source identification          | Random value |
+| Org Code     | 2B     | Organization identification    | Unique value per organization, usually 4-digit hex |
 | Hash         | 8B     | Source storage                 | First 8 bytes of HMAC-SHA256 hash deterministically derived from date/time and source |
 | Signature    | 64B    | Tamper prevention              | Ed25519 signature of previous fields |
 
@@ -29,27 +29,22 @@ Secrets required for mark creation:
 ### Version
 
 The current version is `0x01`.
-Stored as 1 byte (8 bits) in little-endian format, allowing 256 possible versions.
-
-### Organization Code
-
-A 20-bit (2.5-byte) value, represented as 5-digit hexadecimal (e.g., `0x0a1b2`).
-Supports approximately 1.04 million organizations (1,048,576 variations).
-Randomly assigned per organization.
-
-### Nonce
-
-A 12-bit (1.5-byte) random value, supporting 4,096 variations.
-The combination of timestamp and nonce is used to query the source externally.
 
 ### Timestamp
 
-Unix milliseconds represented as a 6-byte integer (approximately 8,900 years representable).
+Unix milliseconds represented as a 6-byte integer.
 
-W-ZeroAPI processes more than 10 images per second, pessimistically estimating about 0.1 images per millisecond per organization (100/sec).
-Considering traffic spikes and parallel processing environments, collisions in milliseconds per mark cannot be completely avoided.
+W-ZeroAPI processes more than 10 images per second, pessimistically estimating about 0.1 images per millisecond per organization. Considering traffic spikes and parallel processing, collisions in marks per millisecond cannot be completely avoided.
 
 Such collisions mean the source cannot be uniquely identified in external resources, so a nonce is used to ensure uniqueness.
+
+### Nonce
+
+A 2-byte random value. The combination of timestamp and nonce is used to query the source externally.
+
+### Organization Code
+
+A 2-byte hexadecimal value, e.g., `0x0a1b`. Randomly assigned per organization.
 
 ### Hash
 
