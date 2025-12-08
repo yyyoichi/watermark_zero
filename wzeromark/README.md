@@ -1,6 +1,6 @@
 # How to Generate Marks
 
-This document describes the procedure for generating a bit sequence (**mark**, []bool) from a user-input string (**source**) using the Watermark Zero API (hereafter, `W-ZeroAPI`). The algorithm is publicly available and widely used.
+This document describes the procedure for generating a byte sequence (**mark**, []byte) from a user-input string (**source**) using the Watermark Zero API (hereafter, `W-ZeroAPI`). The algorithm is publicly available and widely used.
 
 ## Overview
 

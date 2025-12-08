@@ -1,9 +1,11 @@
 module github.com/yyyoichi/watermark_zero
 
-go 1.24.9
+go 1.24.10
 
 require (
 	github.com/stretchr/testify v1.11.1
+	github.com/yyyoichi/bitstream-go v0.2.1
+	github.com/yyyoichi/golay v0.2.1
 	gonum.org/v1/gonum v0.16.0
 )
 
