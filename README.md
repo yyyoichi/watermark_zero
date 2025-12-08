@@ -59,6 +59,21 @@ https://pkg.go.dev/github.com/yyyoichi/golay
 go get github.com/yyyoichi/golay
 ```
 
+
+## Parameters and Noise Level
+
+Increasing the D1 and D2 parameters improves the extraction success rate, but image quality will degrade.
+Additionally, dividing the image into finer blocks increases the embedding capacity, but also increases noise.
+
+![ssim](./docs/images/ssim.png)
+
+![success-rate](./docs/images/success-rate.png)
+
+## Reference
+
+These examples are implemented in [./exp](./exp/).
+All experiments were conducted to investigate resistance to JPEG compression.
+
 ## Benchmark
 
 ```txt

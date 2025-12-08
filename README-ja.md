@@ -30,3 +30,17 @@ https://pkg.go.dev/github.com/yyyoichi/golay
 ```
 go get github.com/yyyoichi/golay
 ```
+
+## パラメータとノイズ量
+
+D1,D2のパラメータは大きくすることで取り出し成功率は上がります。一方で画質は低下します。
+また、画像を細かいブロックを分割すれば埋め込み数は上昇しますが、ノイズ量は増えます。
+
+![ssim](./docs/images/ssim.png)
+
+![success-rate](./docs/images/success-rate.png)
+
+## 参考
+
+この例は[./exp](./exp/)に実装しています。
+すべてJPEG圧縮に対する耐性調査として実施されました。
