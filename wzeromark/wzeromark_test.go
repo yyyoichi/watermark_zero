@@ -461,4 +461,25 @@ func TestWZeroMark(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ok4)
 	})
+	t.Run("PublicKeyAt", func(t *testing.T) {
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		m, err := New(key, key, "1a2b")
+		require.NoError(t, err)
+		timestamp := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+
+		pub1, err := m.PublicKeyAt(timestamp)
+		require.NoError(t, err)
+		pub2, err := m.PublicKeyAt(timestamp)
+		require.NoError(t, err)
+		assert.Equal(t, pub1, pub2, "PublicKeyAt should return the same key for the same timestamp")
+
+		// Check that the returned key is a valid ed25519 public key (32 bytes)
+		assert.Len(t, pub1, ed25519.PublicKeySize)
+
+		// Different timestamps should generate different keys
+		pub3, err := m.PublicKeyAt(timestamp.Add(time.Hour))
+		require.NoError(t, err)
+		assert.NotEqual(t, pub1, pub3, "PublicKeyAt should return different keys for different timestamps")
+	})
 }

@@ -127,6 +127,18 @@ func (m *WZeroMark) EqualHash(hash, src string, timestamp time.Time) (ok bool, e
 	return
 }
 
+// PublicKeyAt returns the Ed25519 public key for the given timestamp.
+// Note: The public key rotates hourly based on the timestamp.
+func (m *WZeroMark) PublicKeyAt(timestamp time.Time) (ed25519.PublicKey, error) {
+	edKeySeed, err := m.ed25519KeyGen.Generate(timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate Ed25519 key seed: %w", err)
+	}
+	priv := ed25519.NewKeyFromSeed(edKeySeed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return pub, nil
+}
+
 // encode is an internal method that converts the source string into the watermark byte slice.
 // Optionally returns the hash, timestamp, and nonce used in the watermark.
 func (m *WZeroMark) encode(src string, mark []byte, hash *string, timestamp *time.Time, nonce *string) error {
