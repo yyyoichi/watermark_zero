@@ -129,7 +129,7 @@ func (m *WZeroMark) EqualHash(hash, src string, timestamp time.Time) (ok bool, e
 
 // PublicKeyAt returns the Ed25519 public key for the given timestamp.
 // Note: The public key rotates hourly based on the timestamp.
-func (m *WZeroMark) PublicKeyAt(timestamp time.Time) ([]byte, error) {
+func (m *WZeroMark) PublicKeyAt(timestamp time.Time) (ed25519.PublicKey, error) {
 	edKeySeed, err := m.ed25519KeyGen.Generate(timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Ed25519 key seed: %w", err)
