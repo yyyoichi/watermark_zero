@@ -1,7 +1,6 @@
 package wzeromark
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
@@ -86,8 +85,8 @@ func (m *WZeroMark) FullDecode(mark []byte) (hash string, timestamp time.Time, n
 
 // DecodeUnverified parses the watermark without verifying the signature.
 // It returns the decoded values and a verifier function that takes a public key to validate the signature.
-func (m *WZeroMark) DecodeUnverified(mark []byte) (hash string, timestamp time.Time, nonce string, verifier func(ed25519.PublicKey) bool, err error) {
-	hash, timestamp, nonce, err = m.parse(mark)
+func DecodeUnverified(mark []byte) (hash string, timestamp time.Time, nonce string, orgCode string, verifier func(ed25519.PublicKey) bool, err error) {
+	hash, timestamp, nonce, orgCode, err = parse(mark)
 	if err != nil {
 		return
 	}
@@ -222,9 +221,13 @@ func (m *WZeroMark) encodeSrc(keyClock time.Time, src string) ([]byte, string, e
 // decode is an internal method that returns the hash, timestamp, and nonce from the watermark byte slice.
 // Optionally returns these values.
 func (m *WZeroMark) decode(mark []byte, hash *string, timestamp *time.Time, nonce *string) error {
-	h, ts, n, err := m.parse(mark)
+	h, ts, n, org, err := parse(mark)
 	if err != nil {
 		return err
+	}
+
+	if org != hex.EncodeToString(m.orgBytes) {
+		return fmt.Errorf("%w: got %s, want %x", ErrInvalidOrgCode, org, m.orgBytes)
 	}
 
 	// 1. Generate Ed25519 Public Key
@@ -252,23 +255,21 @@ func (m *WZeroMark) decode(mark []byte, hash *string, timestamp *time.Time, nonc
 	return nil
 }
 
-// parse is an internal method that extracts values from the watermark byte slice and validates basic structure.
-func (m *WZeroMark) parse(mark []byte) (hash string, timestamp time.Time, nonce string, err error) {
+// parse extracts values from the watermark byte slice and validates basic structure.
+func parse(mark []byte) (hash string, timestamp time.Time, nonce string, orgCode string, err error) {
 	if len(mark) != markByteLen {
-		return "", time.Time{}, "", fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
+		return "", time.Time{}, "", "", fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
 	}
 
 	if mark[0] != version1 {
-		return "", time.Time{}, "", fmt.Errorf("%w: %d", ErrInvalidVersion, mark[0])
-	}
-	if orgBytes := mark[9:11]; !bytes.Equal(m.orgBytes, orgBytes) {
-		return "", time.Time{}, "", fmt.Errorf("%w: got %x, want %x", ErrInvalidOrgCode, orgBytes, m.orgBytes)
+		return "", time.Time{}, "", "", fmt.Errorf("%w: %d", ErrInvalidVersion, mark[0])
 	}
 
 	msec := int64(binary.BigEndian.Uint64(mark[1:9])) >> 16
 	timestamp = time.UnixMilli(msec)
 	nonce = hex.EncodeToString(mark[7:9])
+	orgCode = hex.EncodeToString(mark[9:11])
 	hash = hex.EncodeToString(mark[11:19])
 
-	return hash, timestamp, nonce, nil
+	return hash, timestamp, nonce, orgCode, nil
 }
