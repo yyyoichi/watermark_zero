@@ -501,11 +501,12 @@ func TestWZeroMark(t *testing.T) {
 		require.NoError(t, err)
 
 		// Decode without verification
-		decHash, decTimestamp, decNonce, verifier, err := m.DecodeUnverified(mark)
+		decHash, decTimestamp, decNonce, decOrg, verifier, err := DecodeUnverified(mark)
 		require.NoError(t, err)
 		assert.Equal(t, hash, decHash)
 		assert.Equal(t, timestamp.UnixMilli(), decTimestamp.UnixMilli())
 		assert.Equal(t, nonce, decNonce)
+		assert.Equal(t, "1a2b", decOrg)
 		assert.NotNil(t, verifier)
 
 		// Verify with correct public key
