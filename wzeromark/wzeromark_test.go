@@ -482,4 +482,37 @@ func TestWZeroMark(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, pub1, pub3, "PublicKeyAt should return different keys for different timestamps")
 	})
+
+	t.Run("DecodeUnverified", func(t *testing.T) {
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		m, err := New(key, key, "1a2b")
+		require.NoError(t, err)
+		m.now = func() time.Time {
+			return time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+		}
+
+		src := "decode-unverified-test"
+		mark, hash, timestamp, nonce, err := m.FullEncode(src)
+		require.NoError(t, err)
+
+		// Get public key for verification
+		pub, err := m.PublicKeyAt(timestamp)
+		require.NoError(t, err)
+
+		// Decode without verification
+		decHash, decTimestamp, decNonce, verifier, err := m.DecodeUnverified(mark)
+		require.NoError(t, err)
+		assert.Equal(t, hash, decHash)
+		assert.Equal(t, timestamp.UnixMilli(), decTimestamp.UnixMilli())
+		assert.Equal(t, nonce, decNonce)
+		assert.NotNil(t, verifier)
+
+		// Verify with correct public key
+		assert.True(t, verifier(pub))
+
+		// Verify with incorrect public key
+		_, wrong, _ := ed25519.GenerateKey(rand.Reader)
+		assert.False(t, verifier(wrong.Public().(ed25519.PublicKey)))
+	})
 }
