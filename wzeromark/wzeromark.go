@@ -84,6 +84,24 @@ func (m *WZeroMark) FullDecode(mark []byte) (hash string, timestamp time.Time, n
 	return
 }
 
+// DecodeUnverified parses the watermark without verifying the signature.
+// It returns the decoded values and a verifier function that takes a public key to validate the signature.
+func (m *WZeroMark) DecodeUnverified(mark []byte) (hash string, timestamp time.Time, nonce string, verifier func(ed25519.PublicKey) bool, err error) {
+	hash, timestamp, nonce, err = m.parse(mark)
+	if err != nil {
+		return
+	}
+
+	// Return verifier closure
+	verifier = func(pub ed25519.PublicKey) bool {
+		return ed25519.VerifyWithOptions(pub, mark[:19], mark[19:], &ed25519.Options{
+			Context: context,
+		}) == nil
+	}
+
+	return
+}
+
 // Verify checks if the watermark byte slice matches the expected hash for the given source string.
 // Returns true if the hash matches the hash generated from src and timestamp.
 // Also returns the timestamp and nonce.
@@ -204,20 +222,16 @@ func (m *WZeroMark) encodeSrc(keyClock time.Time, src string) ([]byte, string, e
 // decode is an internal method that returns the hash, timestamp, and nonce from the watermark byte slice.
 // Optionally returns these values.
 func (m *WZeroMark) decode(mark []byte, hash *string, timestamp *time.Time, nonce *string) error {
-	if len(mark) != markByteLen {
-		return fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
-	}
-
-	msec := int64(binary.BigEndian.Uint64(mark[1:9])) >> 16
-	rectimestamp := time.UnixMilli(msec)
-
-	// 1. Generate Ed25519 Private Key
-	edKeySeed, err := m.ed25519KeyGen.Generate(rectimestamp)
+	h, ts, n, err := m.parse(mark)
 	if err != nil {
-		return fmt.Errorf("failed to generate Ed25519 key seed: %w", err)
+		return err
 	}
-	priv := ed25519.NewKeyFromSeed(edKeySeed)
-	pub := priv.Public().(ed25519.PublicKey)
+
+	// 1. Generate Ed25519 Public Key
+	pub, err := m.PublicKeyAt(ts)
+	if err != nil {
+		return err
+	}
 
 	// 2. Verify Signature
 	if err := ed25519.VerifyWithOptions(pub, mark[:19], mark[19:], &ed25519.Options{
@@ -225,21 +239,36 @@ func (m *WZeroMark) decode(mark []byte, hash *string, timestamp *time.Time, nonc
 	}); err != nil {
 		return ErrInvalidSignature
 	}
-	if mark[0] != version1 {
-		return fmt.Errorf("%w: %d", ErrInvalidVersion, mark[0])
-	}
-	if orgBytes := mark[9:11]; !bytes.Equal(m.orgBytes, orgBytes) {
-		return fmt.Errorf("%w: got %x, want %x", ErrInvalidOrgCode, orgBytes, m.orgBytes)
-	}
 
 	if timestamp != nil {
-		*timestamp = rectimestamp
+		*timestamp = ts
 	}
 	if nonce != nil {
-		*nonce = hex.EncodeToString(mark[7:9])
+		*nonce = n
 	}
 	if hash != nil {
-		*hash = hex.EncodeToString(mark[11:19])
+		*hash = h
 	}
 	return nil
+}
+
+// parse is an internal method that extracts values from the watermark byte slice and validates basic structure.
+func (m *WZeroMark) parse(mark []byte) (hash string, timestamp time.Time, nonce string, err error) {
+	if len(mark) != markByteLen {
+		return "", time.Time{}, "", fmt.Errorf("%w: %d", ErrInvalidMarkLength, len(mark))
+	}
+
+	if mark[0] != version1 {
+		return "", time.Time{}, "", fmt.Errorf("%w: %d", ErrInvalidVersion, mark[0])
+	}
+	if orgBytes := mark[9:11]; !bytes.Equal(m.orgBytes, orgBytes) {
+		return "", time.Time{}, "", fmt.Errorf("%w: got %x, want %x", ErrInvalidOrgCode, orgBytes, m.orgBytes)
+	}
+
+	msec := int64(binary.BigEndian.Uint64(mark[1:9])) >> 16
+	timestamp = time.UnixMilli(msec)
+	nonce = hex.EncodeToString(mark[7:9])
+	hash = hex.EncodeToString(mark[11:19])
+
+	return hash, timestamp, nonce, nil
 }
