@@ -55,7 +55,14 @@ func HaarIDWT(result [][]float32, w, h int, indexMap []int) []float32 {
 		cV = result[2]
 		cD = result[3]
 	)
-	hw := (w + 1) / 2
+	hw, hh := (w+1)/2, (h+1)/2
+	l := hw * hh
+	if indexMap == nil || len(indexMap) != l {
+		indexMap = make([]int, l)
+		for i := range l {
+			indexMap[i] = i
+		}
+	}
 	for y0 := 0; y0 < h; y0 += 2 {
 		for x0 := 0; x0 < w; x0 += 2 {
 			idx := indexMap[(y0/2)*hw+(x0/2)]
