@@ -122,3 +122,13 @@ BenchmarkEmbed_FHD/16x16_D1D2-4               24         463504708 ns/op        
 PASS
 ok      github.com/yyyoichi/watermark_zero/bench        368.540s
 ```
+
+## Related Services
+
+### zerome.me  
+
+This tool utilizes a watermarking algorithm.
+You can embed watermarks into images and verify them directly from the UI.
+It was created to help creators prove ownership.
+
+https://zerome.me
