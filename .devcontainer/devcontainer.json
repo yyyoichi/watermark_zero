@@ -15,14 +15,37 @@
         "ghcr.io/jsburckhardt/devcontainer-features/ruff:1": {},
 		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
         "ghcr.io/devcontainers-extra/features/ffmpeg-apt-get:1": {},
+        "ghcr.io/devcontainers/features/rust:1": {
+			"version": "latest",
+			"profile": "default"
+		}
 	},
+    "mounts": [
+		{
+			"type": "volume",
+			"source": "wm-cargo-target",
+			"target": "/tmp/cargo/target"
+		}
+	],
     "remoteUser": "vscode",
 	"workspaceFolder": "/workspaces/watermark_zero",
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/watermark_zero,type=bind,consistency=cached",
     "postCreateCommand": "sh ./.devcontainer/init.sh",
 	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
 	"containerEnv": {
+        "CARGO_BUILD_TARGET_DIR": "/tmp/cargo/target",
         "TZ": "UTC"
     },
-	"customizations": {}
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"rust-lang.rust-analyzer"
+			],
+            "settings": {
+                "rust-analyzer.linkedProjects": [
+                    "./rust/Cargo.toml"
+                ]
+            }
+		}
+	}
 }
