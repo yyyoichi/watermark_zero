@@ -142,3 +142,15 @@ func (b *Batch) Extract(ctx context.Context, markLen int, opts ...Option) ([]boo
 	// Uses pre-computed wavelets and DCT cache for improved performance.
 	return watermark.Extract(ctx, img, markLen, w.blockShape, w.d1, w.d2, b.wavelets, b.dctCache)
 }
+
+type ExtractBatch struct {
+	batch *watermark.ExtractBatch
+}
+
+func NewExtractBatch(src image.Image) *ExtractBatch {
+	return &ExtractBatch{batch: watermark.NewExtractBatch(src)}
+}
+func (b *ExtractBatch) Extract(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
+	w, _ := New(opts...)
+	return b.batch.Extract(ctx, markLen, w.blockShape, w.d1, w.d2)
+}
