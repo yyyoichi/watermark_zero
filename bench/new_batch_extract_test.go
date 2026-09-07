@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	watermark "github.com/yyyoichi/watermark_zero"
+	"github.com/yyyoichi/watermark_zero/mark"
 )
 
 func BenchmarkExtractBatch(b *testing.B) {
@@ -47,36 +48,19 @@ func BenchmarkExtractBatch(b *testing.B) {
 	}
 
 	img := createImage(1920, 1080)
-	markLen := 83 * 8
+	markSize := 83
 	ctx := b.Context()
-	b.Run("v1", func(b *testing.B) {
-		for b.Loop() {
-			batch := watermark.NewBatch(img)
-			var wg sync.WaitGroup
-			wg.Add(len(test))
-			for _, tt := range test {
-				go func() {
-					defer wg.Done()
-					result, _ := batch.Extract(ctx, markLen, tt.opts...)
-					_ = result
-				}()
-			}
-			wg.Wait()
+	for b.Loop() {
+		batch := watermark.NewBatch(img)
+		var wg sync.WaitGroup
+		wg.Add(len(test))
+		for _, tt := range test {
+			go func() {
+				defer wg.Done()
+				result, _ := batch.Extract(ctx, mark.NewExtract(markSize), tt.opts...)
+				_ = result
+			}()
 		}
-	})
-	b.Run("v2", func(b *testing.B) {
-		for b.Loop() {
-			batch := watermark.NewExtractBatch(img)
-			var wg sync.WaitGroup
-			wg.Add(len(test))
-			for _, tt := range test {
-				go func() {
-					defer wg.Done()
-					result, _ := batch.Extract(ctx, markLen, tt.opts...)
-					_ = result
-				}()
-			}
-			wg.Wait()
-		}
-	})
+		wg.Wait()
+	}
 }

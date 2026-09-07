@@ -34,6 +34,10 @@ func NewExtractBatch(src image.Image) *ExtractBatch {
 	return &b
 }
 
+func (b *ExtractBatch) TotalBlock(shape BlockShape) int {
+	return shape.totalBlocks(b.waveWidth, b.waveHeight)
+}
+
 func (b *ExtractBatch) Extract(ctx context.Context, markLen int, shape BlockShape, d1, d2 int) ([]bool, error) {
 	totalBlocks := shape.totalBlocks(b.waveWidth, b.waveHeight)
 	mk := newExtractMark(markLen)
