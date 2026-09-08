@@ -105,6 +105,7 @@ func (w *Watermark) init(opts ...Option) error {
 // Batch enables efficient multiple watermark operations on a single image
 // by caching intermediate computation results (wavelets and DCT).
 type Batch struct {
+	extract  *watermark.ExtractBatch
 	original watermark.ImageSource
 	wavelets []*dwt.Wavelets
 	dctCache *dct.Cache
@@ -114,6 +115,7 @@ type Batch struct {
 // and initializes DCT cache for the given image.
 func NewBatch(src image.Image) *Batch {
 	b := &Batch{
+		extract:  watermark.NewExtractBatch(src),
 		original: watermark.NewImageCore(src),
 		dctCache: dct.NewCache(),
 	}
@@ -132,13 +134,15 @@ func (b *Batch) Embed(ctx context.Context, mark EmbedMark, opts ...Option) (imag
 	return watermark.Embed(ctx, img, mark, w.blockShape, w.d1, w.d2, b.wavelets, b.dctCache)
 }
 
-// Extract extracts a bit sequence from the cached image with specified options.
-func (b *Batch) Extract(ctx context.Context, markLen int, opts ...Option) ([]bool, error) {
+func (b *Batch) Extract(ctx context.Context, mark ExtractMark, opts ...Option) (MarkDecoder, error) {
 	w, _ := New(opts...)
-	img := b.original.Copy()
-	if err := watermark.Enable(img, markLen, w.blockShape); err != nil {
-		return nil, fmt.Errorf("%w:%w", ErrTooSmallImage, err)
+	markLen := mark.Len()
+	if n := b.extract.TotalBlock(w.blockShape); n < markLen {
+		return nil, fmt.Errorf("%w: total blocks %d < mark length %d", ErrTooSmallImage, n, markLen)
 	}
-	// Uses pre-computed wavelets and DCT cache for improved performance.
-	return watermark.Extract(ctx, img, markLen, w.blockShape, w.d1, w.d2, b.wavelets, b.dctCache)
+	bits, err := b.extract.Extract(ctx, markLen, w.blockShape, w.d1, w.d2)
+	if err != nil {
+		return nil, err
+	}
+	return mark.NewDecoder(bits), nil
 }

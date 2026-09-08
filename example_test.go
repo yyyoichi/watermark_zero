@@ -60,6 +60,38 @@ func Example_batch() {
 	// こんにちは！
 }
 
+func Example_batchExtrat() {
+	ctx := context.Background()
+
+	m := mark.NewString("Hello World!")
+	marked, _ := watermark.Embed(ctx,
+		image.NewGray(image.Rect(0, 0, 200, 200)),
+		m,
+		watermark.WithBlockShape(4, 4),
+		watermark.WithD1D2(21, 11),
+	)
+
+	var count int
+	batch := watermark.NewBatch(marked)
+	for _, opts := range [][]watermark.Option{
+		{watermark.WithBlockShape(4, 4), watermark.WithD1D2(21, 11)},
+		{watermark.WithBlockShape(4, 4), watermark.WithD1D2(25, 11)},
+		{watermark.WithBlockShape(6, 6), watermark.WithD1D2(21, 11)},
+	} {
+		extractedMark, _ := batch.Extract(ctx,
+			mark.NewExtract(m.ExtractSize()),
+			opts...,
+		)
+		if extractedMark.DecodeToString() == "Hello World!" {
+			count++
+		}
+	}
+	fmt.Println(count)
+
+	// Output:
+	// 1
+}
+
 func Example_mismatchedMarkOptions() {
 	ctx := context.Background()
 	img := image.NewGray(image.Rect(0, 0, 200, 200))
